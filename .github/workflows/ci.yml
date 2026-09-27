@@ -110,7 +110,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev             librsvg2-dev patchelf libdbus-1-dev pkg-config webkit2gtk-driver xvfb
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev \
+            librsvg2-dev patchelf libdbus-1-dev pkg-config webkit2gtk-driver xvfb
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -135,7 +136,7 @@ jobs:
         shell: pwsh
         run: |
           cargo install --git https://github.com/chippers/msedgedriver-tool
-          & "$env:USERPROFILE\.cargoin\msedgedriver-tool.exe"
+          & "$env:USERPROFILE/.cargo/bin/msedgedriver-tool.exe"
           "NATIVE_DRIVER=$PWD\msedgedriver.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Install the E2E runner
