@@ -21,9 +21,11 @@ use axum::Router;
 use tokio::sync::oneshot;
 
 mod control;
+mod kernel;
 mod oauth;
 mod runtime;
 pub mod state;
+mod tty;
 
 pub use state::{MockAssignment, MockFile, MockRuntime, MockState, RecordedRequest};
 
@@ -86,6 +88,8 @@ fn router(state: Shared) -> Router {
         .merge(oauth::routes())
         .merge(control::routes())
         .merge(runtime::routes())
+        .merge(kernel::routes())
+        .merge(tty::routes())
         .layer(middleware::from_fn_with_state(state.clone(), record))
         .with_state(state)
 }

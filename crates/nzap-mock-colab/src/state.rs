@@ -78,6 +78,8 @@ pub struct MockRuntime {
     pub files: BTreeMap<String, MockFile>,
     pub kernels: Vec<String>,
     pub sessions: Vec<Value>,
+    /// Every cell the kernel received, in order.
+    pub executed: Vec<String>,
     pub interrupts: usize,
     pub restarts: usize,
 }
@@ -138,6 +140,10 @@ pub struct MockState {
 
     // -- runtimes ------------------------------------------------------------
     pub runtimes: HashMap<String, MockRuntime>,
+    /// `(endpoint, cols, rows)` for every terminal resize.
+    pub tty_resizes: Vec<(String, u64, u64)>,
+    /// Every command line entered in a terminal.
+    pub tty_commands: Vec<String>,
 
     pub requests: Vec<RecordedRequest>,
     counter: u64,
@@ -192,6 +198,8 @@ impl MockState {
             xsrf_tokens: HashSet::new(),
 
             runtimes: HashMap::new(),
+            tty_resizes: Vec::new(),
+            tty_commands: Vec::new(),
 
             requests: Vec::new(),
             counter: 0,
