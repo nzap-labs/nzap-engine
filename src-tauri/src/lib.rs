@@ -98,6 +98,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::app::app_info,
             commands::app::open_url,
+            commands::app::reveal_path,
             commands::app::open_log_dir,
             commands::app::stream_cancel,
             commands::app::config_get,
@@ -145,9 +146,7 @@ pub fn run() {
             commands::files::files_rename,
             commands::files::files_delete,
             commands::files::files_download,
-            commands::files::files_upload_pick,
             commands::files::files_upload_bytes,
-            commands::files::open_text_file,
             commands::files::save_text_file,
             commands::notebooks::notebooks_list,
             commands::notebooks::notebooks_refresh,

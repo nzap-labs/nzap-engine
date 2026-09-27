@@ -50,6 +50,16 @@ pub fn open_url(app: AppHandle, state: State<'_, AppState>, url: String) -> CmdR
     open_external(&app, &state, &url).map_err(Into::into)
 }
 
+/// Show a saved file (a job artifact) in the system file manager.
+#[tauri::command]
+pub fn reveal_path(app: AppHandle, path: String) -> CmdResult<()> {
+    let path = std::path::PathBuf::from(path);
+    if !path.exists() {
+        return Err(Error::not_found("That file no longer exists.").into());
+    }
+    app.opener().reveal_item_in_dir(&path).map_err(|error| Error::internal(error.to_string()).into())
+}
+
 #[tauri::command]
 pub fn open_log_dir(app: AppHandle) -> CmdResult<()> {
     let dir = app.path().app_log_dir().map_err(|error| Error::Io(error.to_string()))?;

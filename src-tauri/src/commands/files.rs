@@ -2,7 +2,6 @@
 
 use nzap_core::session::FileListing;
 use nzap_core::Error;
-use serde::Serialize;
 use serde_json::Value;
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, State};
@@ -85,26 +84,6 @@ pub async fn files_download(
     dialogs::save_bytes(&app, filename, None, bytes).await.map_err(Into::into)
 }
 
-/// Pick local files and upload them into `dir` on the runtime. Returns the
-/// remote paths written.
-#[tauri::command]
-pub async fn files_upload_pick(
-    app: AppHandle,
-    state: State<'_, AppState>,
-    name: String,
-    dir: String,
-) -> CmdResult<Vec<String>> {
-    let picked = dialogs::pick_files(&app, None, true).await?;
-    let mut written = Vec::new();
-    for file in picked {
-        let bytes = dialogs::read_for_upload(&file).await?;
-        let remote = join_remote(&dir, &file.name);
-        state.engine.sessions.upload_file(&name, &remote, &bytes).await?;
-        written.push(remote);
-    }
-    Ok(written)
-}
-
 fn join_remote(dir: &str, filename: &str) -> String {
     let dir = dir.trim_matches('/');
     if dir.is_empty() {
@@ -140,30 +119,6 @@ pub async fn files_upload_bytes(
     };
     let bytes = bytes.clone();
     state.engine.sessions.upload_file(&name, &path, &bytes).await.map_err(Into::into)
-}
-
-#[derive(Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenedFile {
-    pub name: String,
-    pub content: String,
-}
-
-/// Let the user pick a local text file (a script, notebook or requirements
-/// file) and return its contents.
-#[tauri::command]
-pub async fn open_text_file(
-    app: AppHandle,
-    extensions: Option<Vec<String>>,
-) -> CmdResult<Option<OpenedFile>> {
-    let extensions: Vec<String> = extensions.unwrap_or_default();
-    let refs: Vec<&str> = extensions.iter().map(String::as_str).collect();
-    let filter = (!refs.is_empty()).then_some(("Files", refs.as_slice()));
-    let Some(file) = dialogs::pick_files(&app, filter, false).await?.into_iter().next() else {
-        return Ok(None);
-    };
-    let content = dialogs::read_text(&file).await?;
-    Ok(Some(OpenedFile { name: file.name, content }))
 }
 
 /// Save text the UI produced (an executed notebook, a job log) to a file the

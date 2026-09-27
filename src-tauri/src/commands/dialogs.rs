@@ -8,8 +8,7 @@ use nzap_core::{Error, Result};
 use tauri::AppHandle;
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
-/// Largest file the app reads from disk for the UI (scripts, notebooks,
-/// requirements, uploads go through [`read_for_upload`]).
+/// Largest text file the app reads from disk (imported notebooks).
 pub const MAX_TEXT_FILE_BYTES: u64 = 20 * 1024 * 1024;
 /// Largest single upload to a runtime.
 pub const MAX_UPLOAD_BYTES: u64 = 512 * 1024 * 1024;
@@ -90,13 +89,4 @@ pub async fn read_text(file: &PickedFile) -> Result<String> {
     let bytes = tokio::fs::read(&file.path).await?;
     String::from_utf8(bytes)
         .map_err(|_| Error::invalid(format!("{} is not a text file.", file.name)))
-}
-
-/// Read a picked file for upload to a runtime.
-pub async fn read_for_upload(file: &PickedFile) -> Result<Vec<u8>> {
-    let size = tokio::fs::metadata(&file.path).await?.len();
-    if size > MAX_UPLOAD_BYTES {
-        return Err(Error::invalid(format!("{} is larger than 512 MB.", file.name)));
-    }
-    Ok(tokio::fs::read(&file.path).await?)
 }
