@@ -53,7 +53,11 @@ async fn status_account_and_disconnect() {
     assert_eq!(account.colab.unwrap()["eligibleGpus"], json!(["T4"]));
 
     // Disconnecting releases runtimes and revokes the grant.
-    let view = engine.sessions.create(RuntimeRequest { name: "box".into(), ..RuntimeRequest::default() }).await.unwrap();
+    let view = engine
+        .sessions
+        .create(RuntimeRequest { name: "box".into(), ..RuntimeRequest::default() })
+        .await
+        .unwrap();
     engine.disconnect().await.unwrap();
     assert!(mock.state().unassigned.contains(&view.endpoint));
     assert!(engine.sessions.views().is_empty());
@@ -86,7 +90,10 @@ async fn a_stopped_colab_is_a_warning_not_a_disconnect() {
     // Colab's front door goes away but the token is still fine.
     let offline = Engine::new(EngineOptions {
         paths: AppPaths::under(dir.path()),
-        endpoints: Endpoints { colab: "http://127.0.0.1:9".into(), ..Endpoints::single_host(&mock.base_url) },
+        endpoints: Endpoints {
+            colab: "http://127.0.0.1:9".into(),
+            ..Endpoints::single_host(&mock.base_url)
+        },
         use_keychain: false,
         oauth_client: Some(OAuthClient { client_id: "test-client".into(), client_secret: None }),
     })
@@ -103,18 +110,27 @@ async fn settings_and_oauth_client() {
     let engine = engine(&mock, dir.path());
 
     let settings = engine
-        .update_settings(SettingsPatch { keep_alive_interval_seconds: Some(90), ..SettingsPatch::default() })
+        .update_settings(SettingsPatch {
+            keep_alive_interval_seconds: Some(90),
+            ..SettingsPatch::default()
+        })
         .unwrap();
     assert_eq!(settings.keep_alive_interval_seconds, 90);
     assert_eq!(engine.hardware_config().keep_alive_interval, 90);
     assert_eq!(engine.hardware_config().gpus, vec!["t4", "l4", "g4", "a100", "h100"]);
 
     let catalog = format!("{}/static/catalog/", mock.base_url);
-    engine.update_settings(SettingsPatch { catalog_url: Some(catalog.clone()), ..SettingsPatch::default() }).unwrap();
+    engine
+        .update_settings(SettingsPatch {
+            catalog_url: Some(catalog.clone()),
+            ..SettingsPatch::default()
+        })
+        .unwrap();
     assert_eq!(engine.notebooks.catalog().base_url(), catalog);
 
     // A custom client can be set while disconnected, and is persisted.
-    let custom = r#"{"installed": {"client_id": "mine.apps.googleusercontent.com", "client_secret": "s"}}"#;
+    let custom =
+        r#"{"installed": {"client_id": "mine.apps.googleusercontent.com", "client_secret": "s"}}"#;
     assert!(engine.set_oauth_client(Some(custom)).await.unwrap());
     assert_eq!(engine.auth.oauth_client().client_id, "mine.apps.googleusercontent.com");
     assert!(dir.path().join("config").join("oauth-client.json").exists());

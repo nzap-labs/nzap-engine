@@ -11,22 +11,44 @@ use super::dialogs::{self, MAX_UPLOAD_BYTES};
 use crate::state::{AppState, CmdResult};
 
 #[tauri::command]
-pub async fn files_list(state: State<'_, AppState>, name: String, path: Option<String>) -> CmdResult<FileListing> {
-    state.engine.sessions.list_files(&name, path.as_deref().unwrap_or_default()).await.map_err(Into::into)
+pub async fn files_list(
+    state: State<'_, AppState>,
+    name: String,
+    path: Option<String>,
+) -> CmdResult<FileListing> {
+    state
+        .engine
+        .sessions
+        .list_files(&name, path.as_deref().unwrap_or_default())
+        .await
+        .map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn files_read(state: State<'_, AppState>, name: String, path: String) -> CmdResult<Value> {
+pub async fn files_read(
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+) -> CmdResult<Value> {
     state.engine.sessions.read_file(&name, &path).await.map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn files_write(state: State<'_, AppState>, name: String, path: String, content: String) -> CmdResult<Value> {
+pub async fn files_write(
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+    content: String,
+) -> CmdResult<Value> {
     state.engine.sessions.write_file(&name, &path, &content).await.map_err(Into::into)
 }
 
 #[tauri::command]
-pub async fn files_mkdir(state: State<'_, AppState>, name: String, path: String) -> CmdResult<Value> {
+pub async fn files_mkdir(
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+) -> CmdResult<Value> {
     state.engine.sessions.make_directory(&name, &path).await.map_err(Into::into)
 }
 
@@ -54,7 +76,12 @@ pub async fn files_download(
     path: String,
 ) -> CmdResult<Option<String>> {
     let bytes = state.engine.sessions.download_file(&name, &path).await?;
-    let filename = path.trim_end_matches('/').rsplit('/').next().filter(|name| !name.is_empty()).unwrap_or("download");
+    let filename = path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("download");
     dialogs::save_bytes(&app, filename, None, bytes).await.map_err(Into::into)
 }
 
@@ -96,14 +123,19 @@ fn header(request: &Request<'_>, name: &str) -> Option<String> {
 /// runtime and remote path travel in `x-nzap-session` / `x-nzap-path`
 /// (percent-encoded).
 #[tauri::command]
-pub async fn files_upload_bytes(state: State<'_, AppState>, request: Request<'_>) -> CmdResult<Value> {
+pub async fn files_upload_bytes(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> CmdResult<Value> {
     let InvokeBody::Raw(bytes) = request.body() else {
         return Err(Error::invalid("Upload a file's raw bytes.").into());
     };
     if bytes.len() as u64 > MAX_UPLOAD_BYTES {
         return Err(Error::invalid("That file is larger than 512 MB.").into());
     }
-    let (Some(name), Some(path)) = (header(&request, "x-nzap-session"), header(&request, "x-nzap-path")) else {
+    let (Some(name), Some(path)) =
+        (header(&request, "x-nzap-session"), header(&request, "x-nzap-path"))
+    else {
         return Err(Error::invalid("Missing runtime or path.").into());
     };
     let bytes = bytes.clone();
@@ -120,7 +152,10 @@ pub struct OpenedFile {
 /// Let the user pick a local text file (a script, notebook or requirements
 /// file) and return its contents.
 #[tauri::command]
-pub async fn open_text_file(app: AppHandle, extensions: Option<Vec<String>>) -> CmdResult<Option<OpenedFile>> {
+pub async fn open_text_file(
+    app: AppHandle,
+    extensions: Option<Vec<String>>,
+) -> CmdResult<Option<OpenedFile>> {
     let extensions: Vec<String> = extensions.unwrap_or_default();
     let refs: Vec<&str> = extensions.iter().map(String::as_str).collect();
     let filter = (!refs.is_empty()).then_some(("Files", refs.as_slice()));
@@ -134,8 +169,16 @@ pub async fn open_text_file(app: AppHandle, extensions: Option<Vec<String>>) -> 
 /// Save text the UI produced (an executed notebook, a job log) to a file the
 /// user picks.
 #[tauri::command]
-pub async fn save_text_file(app: AppHandle, filename: String, content: String) -> CmdResult<Option<String>> {
-    let filename = filename.rsplit(['/', '\\']).next().filter(|name| !name.is_empty()).unwrap_or("download.txt");
+pub async fn save_text_file(
+    app: AppHandle,
+    filename: String,
+    content: String,
+) -> CmdResult<Option<String>> {
+    let filename = filename
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("download.txt");
     dialogs::save_bytes(&app, filename, None, content.into_bytes()).await.map_err(Into::into)
 }
 

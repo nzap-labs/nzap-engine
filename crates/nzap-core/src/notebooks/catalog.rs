@@ -17,7 +17,8 @@ use super::params::{self, NotebookParam};
 use crate::error::{Error, Result};
 use crate::secrets::write_private;
 
-pub const DEFAULT_CATALOG_URL: &str = "https://raw.githubusercontent.com/nzap-labs/nzap-notebooks/main/";
+pub const DEFAULT_CATALOG_URL: &str =
+    "https://raw.githubusercontent.com/nzap-labs/nzap-notebooks/main/";
 const BUNDLED: &str = include_str!("../../catalog/bundled.json");
 const MAX_INDEX_BYTES: usize = 5 * 1024 * 1024;
 const MAX_SOURCE_BYTES: usize = 512 * 1024;
@@ -114,14 +115,17 @@ pub fn validate_index(index: &CatalogIndex) -> Result<()> {
     }
     let mut slugs = std::collections::HashSet::new();
     for entry in &index.notebooks {
-        let bad = |reason: &str| Error::invalid(format!("Catalog entry '{}': {reason}", entry.slug));
+        let bad =
+            |reason: &str| Error::invalid(format!("Catalog entry '{}': {reason}", entry.slug));
         if !valid_slug(&entry.slug) || !slugs.insert(entry.slug.as_str()) {
             return Err(bad("invalid or duplicate slug"));
         }
         if entry.title.trim().is_empty() {
             return Err(bad("missing title"));
         }
-        if entry.sha256.len() != 64 || !entry.sha256.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()) {
+        if entry.sha256.len() != 64
+            || !entry.sha256.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase())
+        {
             return Err(bad("sha256 must be 64 lower-case hex characters"));
         }
         if !safe_source_path(&entry.source) {
@@ -168,10 +172,20 @@ impl Catalog {
             http,
             base_url: RwLock::new(base_url.to_owned()),
             cache_dir,
-            state: Mutex::new(Loaded { index: bundled(), origin: CatalogOrigin::Bundled, fetched_at: None, error: None }),
+            state: Mutex::new(Loaded {
+                index: bundled(),
+                origin: CatalogOrigin::Bundled,
+                fetched_at: None,
+                error: None,
+            }),
         };
         if let Some((index, meta)) = catalog.read_cache() {
-            *catalog.lock() = Loaded { index, origin: CatalogOrigin::Cache, fetched_at: meta.fetched_at, error: None };
+            *catalog.lock() = Loaded {
+                index,
+                origin: CatalogOrigin::Cache,
+                fetched_at: meta.fetched_at,
+                error: None,
+            };
         }
         catalog
     }
@@ -181,7 +195,10 @@ impl Catalog {
     }
 
     pub fn base_url(&self) -> String {
-        self.base_url.read().map(|url| url.clone()).unwrap_or_else(|_| DEFAULT_CATALOG_URL.to_owned())
+        self.base_url
+            .read()
+            .map(|url| url.clone())
+            .unwrap_or_else(|_| DEFAULT_CATALOG_URL.to_owned())
     }
 
     /// Point at another catalog (Settings); the next refresh loads it.
@@ -205,11 +222,13 @@ impl Catalog {
 
     /// The cached index, if it belongs to the current catalog URL and is valid.
     fn read_cache(&self) -> Option<(CatalogIndex, CacheMeta)> {
-        let meta: CacheMeta = serde_json::from_str(&std::fs::read_to_string(self.meta_path()).ok()?).ok()?;
+        let meta: CacheMeta =
+            serde_json::from_str(&std::fs::read_to_string(self.meta_path()).ok()?).ok()?;
         if meta.url != self.base_url() {
             return None;
         }
-        let index: CatalogIndex = serde_json::from_str(&std::fs::read_to_string(self.index_path()).ok()?).ok()?;
+        let index: CatalogIndex =
+            serde_json::from_str(&std::fs::read_to_string(self.index_path()).ok()?).ok()?;
         validate_index(&index).ok()?;
         Some((index, meta))
     }
@@ -257,14 +276,23 @@ impl Catalog {
         let fetched_at = now();
 
         if response.status() == reqwest::StatusCode::NOT_MODIFIED {
-            let (index, mut meta) =
-                cached.ok_or_else(|| Error::Network("The catalog answered 304 without a cached copy.".into()))?;
+            let (index, mut meta) = cached.ok_or_else(|| {
+                Error::Network("The catalog answered 304 without a cached copy.".into())
+            })?;
             meta.fetched_at = Some(fetched_at.clone());
             self.write_meta(&meta);
-            return Ok(Loaded { index, origin: CatalogOrigin::Remote, fetched_at: Some(fetched_at), error: None });
+            return Ok(Loaded {
+                index,
+                origin: CatalogOrigin::Remote,
+                fetched_at: Some(fetched_at),
+                error: None,
+            });
         }
         if !response.status().is_success() {
-            return Err(Error::Network(format!("The catalog answered {}.", response.status().as_u16())));
+            return Err(Error::Network(format!(
+                "The catalog answered {}.",
+                response.status().as_u16()
+            )));
         }
         let etag = response
             .headers()
@@ -284,7 +312,12 @@ impl Catalog {
             tracing::warn!("Could not cache the catalog: {error}");
         }
         self.write_meta(&CacheMeta { url: base, etag, fetched_at: Some(fetched_at.clone()) });
-        Ok(Loaded { index, origin: CatalogOrigin::Remote, fetched_at: Some(fetched_at), error: None })
+        Ok(Loaded {
+            index,
+            origin: CatalogOrigin::Remote,
+            fetched_at: Some(fetched_at),
+            error: None,
+        })
     }
 
     fn write_meta(&self, meta: &CacheMeta) {
@@ -350,7 +383,8 @@ fn verified(bytes: &[u8], sha: &str) -> Result<String> {
             "The notebook failed its integrity check (SHA-256 mismatch) and was not run.",
         ));
     }
-    String::from_utf8(bytes.to_vec()).map_err(|_| Error::invalid("The notebook source is not UTF-8."))
+    String::from_utf8(bytes.to_vec())
+        .map_err(|_| Error::invalid("The notebook source is not UTF-8."))
 }
 
 #[cfg(test)]

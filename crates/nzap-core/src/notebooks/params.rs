@@ -63,7 +63,10 @@ pub fn validate(params: &[NotebookParam]) -> Result<()> {
             )));
         }
         if !seen.insert(param.key.as_str()) {
-            return Err(Error::invalid(format!("Parameter key '{}' is declared twice.", param.key)));
+            return Err(Error::invalid(format!(
+                "Parameter key '{}' is declared twice.",
+                param.key
+            )));
         }
         if param.label.trim().is_empty() {
             return Err(Error::invalid(format!("Parameter '{}' needs a label.", param.key)));
@@ -75,7 +78,11 @@ pub fn validate(params: &[NotebookParam]) -> Result<()> {
             )));
         }
         if let Some(default) = &param.default {
-            if !(default.is_null() || default.is_string() || default.is_number() || default.is_boolean()) {
+            if !(default.is_null()
+                || default.is_string()
+                || default.is_number()
+                || default.is_boolean())
+            {
                 return Err(Error::invalid(format!(
                     "The default of '{}' must be a string, number or boolean.",
                     param.key
@@ -103,12 +110,15 @@ fn as_number(value: &Value) -> Option<f64> {
 
 /// Validate submitted values against the declaration and return the
 /// coerced `params` dict. Empty submissions fall back to defaults.
-pub fn resolve(declared: &[NotebookParam], submitted: &Map<String, Value>) -> Result<Map<String, Value>> {
+pub fn resolve(
+    declared: &[NotebookParam],
+    submitted: &Map<String, Value>,
+) -> Result<Map<String, Value>> {
     let mut resolved = Map::new();
     for param in declared {
-        let raw = submitted.get(&param.key).filter(|value| {
-            !value.is_null() && value.as_str().is_none_or(|text| !text.is_empty())
-        });
+        let raw = submitted
+            .get(&param.key)
+            .filter(|value| !value.is_null() && value.as_str().is_none_or(|text| !text.is_empty()));
         let Some(value) = raw.or(param.default.as_ref()).filter(|value| !value.is_null()) else {
             if param.required {
                 return Err(Error::invalid(format!("{} is required.", param.label)));
@@ -119,8 +129,12 @@ pub fn resolve(declared: &[NotebookParam], submitted: &Map<String, Value>) -> Re
             ParamType::String | ParamType::Text => Value::String(as_text(value)),
             ParamType::Integer => {
                 let number = as_number(value)
-                    .filter(|number| number.is_finite() && number.fract() == 0.0 && number.abs() < 9e15)
-                    .ok_or_else(|| Error::invalid(format!("{} must be a whole number.", param.label)))?;
+                    .filter(|number| {
+                        number.is_finite() && number.fract() == 0.0 && number.abs() < 9e15
+                    })
+                    .ok_or_else(|| {
+                        Error::invalid(format!("{} must be a whole number.", param.label))
+                    })?;
                 Value::from(number as i64)
             }
             ParamType::Number => {
@@ -129,7 +143,9 @@ pub fn resolve(declared: &[NotebookParam], submitted: &Map<String, Value>) -> Re
                     .ok_or_else(|| Error::invalid(format!("{} must be a number.", param.label)))?;
                 serde_json::Number::from_f64(number).map(Value::Number).unwrap_or(Value::Null)
             }
-            ParamType::Boolean => Value::Bool(matches!(value, Value::Bool(true)) || matches!(value.as_str(), Some("true" | "on"))),
+            ParamType::Boolean => Value::Bool(
+                matches!(value, Value::Bool(true)) || matches!(value.as_str(), Some("true" | "on")),
+            ),
             ParamType::Select => {
                 let text = as_text(value);
                 if param.options.as_ref().is_some_and(|options| !options.contains(&text)) {
@@ -187,7 +203,10 @@ mod tests {
         ] {
             assert!(validate(&params(bad.clone())).is_err(), "{bad}");
         }
-        assert!(serde_json::from_value::<Vec<NotebookParam>>(json!([{"key": "a", "label": "A", "type": "file"}])).is_err());
+        assert!(serde_json::from_value::<Vec<NotebookParam>>(
+            json!([{"key": "a", "label": "A", "type": "file"}])
+        )
+        .is_err());
     }
 
     #[test]
@@ -214,10 +233,17 @@ mod tests {
         assert_eq!(err(json!({"i": "4.5"})), "I must be a whole number.");
         assert_eq!(err(json!({"n": "abc"})), "N must be a number.");
         assert_eq!(err(json!({"c": "z"})), "C must be one of the offered options.");
-        let required = params(json!([{"key": "k", "label": "Key", "type": "string", "required": true}]));
+        let required =
+            params(json!([{"key": "k", "label": "Key", "type": "string", "required": true}]));
         assert_eq!(resolve(&required, &Map::new()).unwrap_err().to_string(), "Key is required.");
         assert_eq!(
-            Value::Object(resolve(&params(json!([{"key": "b", "label": "B", "type": "boolean"}])), &submitted(json!({"b": false}))).unwrap()),
+            Value::Object(
+                resolve(
+                    &params(json!([{"key": "b", "label": "B", "type": "boolean"}])),
+                    &submitted(json!({"b": false}))
+                )
+                .unwrap()
+            ),
             json!({"b": false})
         );
     }
@@ -236,7 +262,8 @@ mod tests {
         assert_eq!(lines[3], "del _nzap_json");
         assert_eq!(lines.last(), Some(&"print(params['s'])"));
         // The whole dict is one string literal on one line.
-        let literal = lines[2].trim_start_matches("params = _nzap_json.loads(").trim_end_matches(')');
+        let literal =
+            lines[2].trim_start_matches("params = _nzap_json.loads(").trim_end_matches(')');
         let decoded: String = serde_json::from_str(literal).unwrap();
         assert_eq!(serde_json::from_str::<Value>(&decoded).unwrap(), Value::Object(values));
     }

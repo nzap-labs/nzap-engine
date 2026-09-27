@@ -46,7 +46,9 @@ pub fn parse_env(env: &EnvSpec) -> Result<Vec<(String, String)>> {
             .map(|item| {
                 item.split_once('=')
                     .map(|(key, value)| (key.to_owned(), value.to_owned()))
-                    .ok_or_else(|| Error::invalid(format!("Invalid env value '{item}'. Expected KEY=VALUE.")))
+                    .ok_or_else(|| {
+                        Error::invalid(format!("Invalid env value '{item}'. Expected KEY=VALUE."))
+                    })
             })
             .collect::<Result<_>>()?,
         EnvSpec::Map(map) => map
@@ -157,7 +159,9 @@ pub fn prepare(request: &RunFileRequest) -> Result<Prepared> {
                 cells
                     .iter()
                     .enumerate()
-                    .filter(|(_, cell)| cell.get("cell_type").and_then(Value::as_str) == Some("code"))
+                    .filter(|(_, cell)| {
+                        cell.get("cell_type").and_then(Value::as_str) == Some("code")
+                    })
                     .map(|(index, cell)| (index, source_of(cell)))
                     .filter(|(_, source)| !source.trim().is_empty())
                     .collect()
@@ -180,11 +184,20 @@ pub fn prepare(request: &RunFileRequest) -> Result<Prepared> {
 /// Stream a file run. Adds `{"type": "cell", index, total, state}` around
 /// each cell and a final `{"type": "run_complete", ...}` carrying the
 /// executed notebook for `.ipynb` inputs.
-pub async fn run(manager: &SessionManager, name: &str, request: &RunFileRequest, emit: &Emit) -> Result<Value> {
+pub async fn run(
+    manager: &SessionManager,
+    name: &str,
+    request: &RunFileRequest,
+    emit: &Emit,
+) -> Result<Value> {
     let prepared = prepare(request)?;
     manager.get(name)?;
     let timeout = Duration::from_secs(request.timeout_seconds.unwrap_or(3600));
-    manager.history().log(name, "automation", json!({"op": "run-file", "filename": request.filename}));
+    manager.history().log(
+        name,
+        "automation",
+        json!({"op": "run-file", "filename": request.filename}),
+    );
 
     let mut result_log = RunLog {
         manager: manager.clone(),
@@ -204,10 +217,13 @@ pub async fn run(manager: &SessionManager, name: &str, request: &RunFileRequest,
     for (position, (index, source)) in prepared.blocks.iter().enumerate() {
         emit(json!({"type": "cell", "index": position, "total": total, "state": "started"}));
         let (cell_emit, seen) = tee(emit);
-        manager.execute(name, &format!("{}{source}", prepared.prelude), timeout, true, &cell_emit).await?;
+        manager
+            .execute(name, &format!("{}{source}", prepared.prelude), timeout, true, &cell_emit)
+            .await?;
         let seen = seen.lock().map(|seen| seen.clone()).unwrap_or_default();
         let status = last_status(&seen);
-        if let Some(cell) = notebook.as_mut().and_then(|notebook| notebook["cells"].get_mut(*index)) {
+        if let Some(cell) = notebook.as_mut().and_then(|notebook| notebook["cells"].get_mut(*index))
+        {
             if cell.get("id").is_none() {
                 cell["id"] = json!(uuid::Uuid::new_v4().simple().to_string()[..8].to_owned());
             }
@@ -219,7 +235,9 @@ pub async fn run(manager: &SessionManager, name: &str, request: &RunFileRequest,
                 .and_then(|event| event.get("execution_count").cloned())
                 .unwrap_or(Value::Null);
         }
-        emit(json!({"type": "cell", "index": position, "total": total, "state": "finished", "status": status}));
+        emit(
+            json!({"type": "cell", "index": position, "total": total, "state": "finished", "status": status}),
+        );
         if status != "ok" {
             failed += 1;
             if request.stop_on_error {
@@ -279,7 +297,8 @@ mod tests {
         assert!(parse_env(&EnvSpec::List(vec!["1BAD=x".into()])).is_err());
         assert!(parse_env(&EnvSpec::List(vec!["BAD-KEY=x".into()])).is_err());
         let map: EnvSpec = serde_json::from_value(json!({"K": "v", "N": 3})).unwrap();
-        let expected: Vec<(String, String)> = vec![("K".into(), "v".into()), ("N".into(), "3".into())];
+        let expected: Vec<(String, String)> =
+            vec![("K".into(), "v".into()), ("N".into(), "3".into())];
         assert_eq!(parse_env(&map).unwrap(), expected);
         assert!(parse_env(&EnvSpec::None).unwrap().is_empty());
     }
@@ -334,6 +353,10 @@ mod tests {
         assert!(prepare(&request("s.py", json!("  \n"))).is_err());
         assert!(prepare(&request("n.ipynb", json!("{\"no\": 1}"))).is_err());
         assert!(prepare(&request("n.ipynb", json!("not json"))).is_err());
-        assert!(prepare(&request("n.ipynb", json!({"cells": [{"cell_type": "markdown", "source": "x"}]}))).is_err());
+        assert!(prepare(&request(
+            "n.ipynb",
+            json!({"cells": [{"cell_type": "markdown", "source": "x"}]})
+        ))
+        .is_err());
     }
 }

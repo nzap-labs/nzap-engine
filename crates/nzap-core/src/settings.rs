@@ -150,16 +150,23 @@ mod tests {
         assert_eq!(updated.keep_alive_interval_seconds, 120);
         assert_eq!(SettingsStore::load(path.clone()).get(), updated);
 
-        let reset = store.update(SettingsPatch { artifacts_dir: Some(" ".into()), ..SettingsPatch::default() });
+        let reset = store
+            .update(SettingsPatch { artifacts_dir: Some(" ".into()), ..SettingsPatch::default() });
         assert_eq!(reset.unwrap().artifacts_dir, None);
 
         for url in ["http://example.com/", "ftp://x/", "not a url", "file:///etc/"] {
-            let result = store.update(SettingsPatch { catalog_url: Some(url.into()), ..SettingsPatch::default() });
+            let result = store.update(SettingsPatch {
+                catalog_url: Some(url.into()),
+                ..SettingsPatch::default()
+            });
             assert!(result.is_err(), "{url}");
         }
         assert!(valid_catalog_url("http://127.0.0.1:8080/static/catalog/"));
         assert!(store
-            .update(SettingsPatch { keep_alive_interval_seconds: Some(5), ..SettingsPatch::default() })
+            .update(SettingsPatch {
+                keep_alive_interval_seconds: Some(5),
+                ..SettingsPatch::default()
+            })
             .is_err());
     }
 
@@ -167,7 +174,11 @@ mod tests {
     fn a_tampered_file_is_sanitised() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
-        std::fs::write(&path, r#"{"catalogUrl": "javascript:alert(1)", "keepAliveIntervalSeconds": 1}"#).unwrap();
+        std::fs::write(
+            &path,
+            r#"{"catalogUrl": "javascript:alert(1)", "keepAliveIntervalSeconds": 1}"#,
+        )
+        .unwrap();
         let settings = SettingsStore::load(path).get();
         assert_eq!(settings.catalog_url, DEFAULT_CATALOG_URL);
         assert_eq!(settings.keep_alive_interval_seconds, MIN_KEEP_ALIVE_SECONDS);

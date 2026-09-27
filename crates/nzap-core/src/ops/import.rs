@@ -175,7 +175,9 @@ async fn read_limited(mut response: reqwest::Response) -> Result<Vec<u8>> {
 fn filename_from_url(url: &str) -> String {
     url::Url::parse(url)
         .ok()
-        .and_then(|url| url.path_segments().and_then(|mut segments| segments.next_back().map(str::to_owned)))
+        .and_then(|url| {
+            url.path_segments().and_then(|mut segments| segments.next_back().map(str::to_owned))
+        })
         .filter(|name| !name.is_empty())
         .map(|name| percent_encoding::percent_decode_str(&name).decode_utf8_lossy().into_owned())
         .unwrap_or_else(|| "imported.ipynb".to_owned())
@@ -189,7 +191,11 @@ pub struct ImportOptions {
 
 /// Fetch a notebook or script. The Google token is only ever sent to the
 /// Drive API.
-pub async fn import_from_url(auth: &AuthManager, link: &str, options: ImportOptions) -> Result<ImportedFile> {
+pub async fn import_from_url(
+    auth: &AuthManager,
+    link: &str,
+    options: ImportOptions,
+) -> Result<ImportedFile> {
     let http = auth.http();
     let (filename, raw) = match resolve_source(link)? {
         Source::Drive { id } => {
@@ -330,9 +336,20 @@ mod tests {
     #[test]
     fn ssrf_guard() {
         for private in [
-            "127.0.0.1", "10.1.2.3", "172.16.0.1", "192.168.1.1", "169.254.169.254", "0.0.0.0",
-            "100.64.0.1", "224.0.0.1", "255.255.255.255", "::1", "fe80::1", "fd00::1",
-            "::ffff:127.0.0.1", "2001:db8::1",
+            "127.0.0.1",
+            "10.1.2.3",
+            "172.16.0.1",
+            "192.168.1.1",
+            "169.254.169.254",
+            "0.0.0.0",
+            "100.64.0.1",
+            "224.0.0.1",
+            "255.255.255.255",
+            "::1",
+            "fe80::1",
+            "fd00::1",
+            "::ffff:127.0.0.1",
+            "2001:db8::1",
         ] {
             assert!(!is_public(private.parse().unwrap()), "{private}");
         }

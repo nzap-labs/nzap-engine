@@ -36,7 +36,10 @@ pub struct CreatedSession {
 
 /// Assign a CPU / GPU / TPU runtime and connect a kernel to it.
 #[tauri::command]
-pub async fn session_create(state: State<'_, AppState>, request: RuntimeRequest) -> CmdResult<CreatedSession> {
+pub async fn session_create(
+    state: State<'_, AppState>,
+    request: RuntimeRequest,
+) -> CmdResult<CreatedSession> {
     let (session, connected) = state.engine.sessions.create_and_connect(request).await?;
     Ok(CreatedSession { session, connected })
 }
@@ -73,7 +76,11 @@ pub async fn session_interrupt(state: State<'_, AppState>, name: String) -> CmdR
 
 /// Answer an `input()` prompt.
 #[tauri::command]
-pub async fn session_stdin(state: State<'_, AppState>, name: String, value: String) -> CmdResult<()> {
+pub async fn session_stdin(
+    state: State<'_, AppState>,
+    name: String,
+    value: String,
+) -> CmdResult<()> {
     state.engine.sessions.send_stdin(&name, &value).await.map_err(Into::into)
 }
 
@@ -109,7 +116,9 @@ pub async fn session_execute(
     let emit = emit_to(on_event);
     let timeout = timeout_seconds.map(Duration::from_secs).unwrap_or(DEFAULT_EXECUTE_TIMEOUT);
     state
-        .run_stream(stream_id, async move { engine.sessions.execute(&name, &code, timeout, true, &emit).await })
+        .run_stream(stream_id, async move {
+            engine.sessions.execute(&name, &code, timeout, true, &emit).await
+        })
         .await
 }
 
@@ -129,7 +138,9 @@ pub async fn session_automation(
     let engine = state.engine.clone();
     let emit = emit_to(on_event);
     state
-        .run_stream(stream_id, async move { automation::run(&engine.sessions, &name, op, &request, &emit).await })
+        .run_stream(stream_id, async move {
+            automation::run(&engine.sessions, &name, op, &request, &emit).await
+        })
         .await
 }
 
@@ -146,7 +157,9 @@ pub async fn session_run_file(
     let engine = state.engine.clone();
     let emit = emit_to(on_event);
     state
-        .run_stream(stream_id, async move { runfile::run(&engine.sessions, &name, &request, &emit).await })
+        .run_stream(stream_id, async move {
+            runfile::run(&engine.sessions, &name, &request, &emit).await
+        })
         .await
 }
 
@@ -173,13 +186,18 @@ pub async fn job_run(
     let engine = state.engine.clone();
     let emit = emit_to(on_event);
     state
-        .run_stream(stream_id, async move { jobs::run(&engine.sessions, spec, Some(artifacts_dir), &emit).await })
+        .run_stream(stream_id, async move {
+            jobs::run(&engine.sessions, spec, Some(artifacts_dir), &emit).await
+        })
         .await
 }
 
 /// Import a notebook from a Colab / Drive / GitHub / https link.
 #[tauri::command]
-pub async fn import_notebook_url(state: State<'_, AppState>, url: String) -> CmdResult<ImportedFile> {
+pub async fn import_notebook_url(
+    state: State<'_, AppState>,
+    url: String,
+) -> CmdResult<ImportedFile> {
     import_from_url(&state.engine.auth, &url, ImportOptions::default()).await.map_err(Into::into)
 }
 
@@ -210,7 +228,11 @@ pub async fn assignment_adopt(
 /// `{"type": "frame", "data": "<raw upstream frame>"}`, then one
 /// `{"type": "closed", "reason": …}`.
 #[tauri::command]
-pub async fn terminal_open(state: State<'_, AppState>, name: String, on_frame: Channel<Value>) -> CmdResult<u32> {
+pub async fn terminal_open(
+    state: State<'_, AppState>,
+    name: String,
+    on_frame: Channel<Value>,
+) -> CmdResult<u32> {
     let sink = Arc::new(move |event: TerminalEvent| {
         let message = match event {
             TerminalEvent::Frame(data) => json!({ "type": "frame", "data": data }),
@@ -261,9 +283,14 @@ pub async fn history_export(
     let events = state.engine.sessions.history().get(&name);
     let (body, _) = nzap_core::history::export(&events, &name, &format)?;
     let extension = format.trim().trim_start_matches('.').to_ascii_lowercase();
-    dialogs::save_bytes(&app, &format!("{name}.{extension}"), Some(("History", [extension.as_str()].as_slice())), body.into_bytes())
-        .await
-        .map_err(Into::into)
+    dialogs::save_bytes(
+        &app,
+        &format!("{name}.{extension}"),
+        Some(("History", [extension.as_str()].as_slice())),
+        body.into_bytes(),
+    )
+    .await
+    .map_err(Into::into)
 }
 
 #[tauri::command]

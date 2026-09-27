@@ -73,7 +73,11 @@ pub struct JobSpec {
 }
 
 pub fn plan(request: &JobRequest) -> Result<JobSpec> {
-    let filename = request.filename.clone().filter(|name| !name.trim().is_empty()).unwrap_or_else(|| "script.py".into());
+    let filename = request
+        .filename
+        .clone()
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| "script.py".into());
     if request.script.trim().is_empty() {
         return Err(Error::invalid("Missing script."));
     }
@@ -111,8 +115,14 @@ pub fn plan(request: &JobRequest) -> Result<JobSpec> {
 }
 
 /// run.py `_build_script_payload`: argv, `__main__`, env, no shebang.
-pub fn build_script_payload(filename: &str, body: &str, args: &[String], env: &[(String, String)]) -> String {
-    let basename = filename.rsplit(['/', '\\']).next().filter(|name| !name.is_empty()).unwrap_or("script.py");
+pub fn build_script_payload(
+    filename: &str,
+    body: &str,
+    args: &[String],
+    env: &[(String, String)],
+) -> String {
+    let basename =
+        filename.rsplit(['/', '\\']).next().filter(|name| !name.is_empty()).unwrap_or("script.py");
     let mut argv = vec![basename.to_owned()];
     argv.extend(args.iter().cloned());
     format!(
@@ -217,7 +227,12 @@ pub fn local_artifact_path(dir: &Path, remote: &str) -> Option<PathBuf> {
 
 /// `colab run`: allocate → run → collect artifacts → release. The VM is
 /// released on every path (including errors and cancellation) unless `keep`.
-pub async fn run(manager: &SessionManager, spec: JobSpec, artifacts_dir: Option<PathBuf>, emit: &Emit) -> Result<Value> {
+pub async fn run(
+    manager: &SessionManager,
+    spec: JobSpec,
+    artifacts_dir: Option<PathBuf>,
+    emit: &Emit,
+) -> Result<Value> {
     let name = spec.runtime.name.clone();
     let hardware = spec.runtime.label();
     emit(json!({"type": "job", "phase": "assigning", "session": name, "hardware": hardware}));
@@ -229,7 +244,11 @@ pub async fn run(manager: &SessionManager, spec: JobSpec, artifacts_dir: Option<
                 Error::TooManyAssignments => TOO_MANY_MESSAGE.to_owned(),
                 Error::Colab { status: Some(400), .. } => {
                     let (_, accelerator, _) = spec.runtime.resolved();
-                    if accelerator == Accelerator::None { error.to_string() } else { quota_message(accelerator) }
+                    if accelerator == Accelerator::None {
+                        error.to_string()
+                    } else {
+                        quota_message(accelerator)
+                    }
                 }
                 other => other.to_string(),
             };
@@ -240,13 +259,16 @@ pub async fn run(manager: &SessionManager, spec: JobSpec, artifacts_dir: Option<
     };
 
     // Released on drop unless `keep` — covers errors and cancellation.
-    let mut release = ReleaseGuard { manager: manager.clone(), name: name.clone(), armed: !spec.keep };
-    let outcome = run_on(manager, &spec, &view.endpoint, &view.accelerator, artifacts_dir, emit).await;
+    let mut release =
+        ReleaseGuard { manager: manager.clone(), name: name.clone(), armed: !spec.keep };
+    let outcome =
+        run_on(manager, &spec, &view.endpoint, &view.accelerator, artifacts_dir, emit).await;
     let released = if spec.keep {
         false
     } else {
         release.armed = false;
-        let released = manager.stop(&name, true).await.map(|outcome| outcome.released).unwrap_or(false);
+        let released =
+            manager.stop(&name, true).await.map(|outcome| outcome.released).unwrap_or(false);
         emit(json!({"type": "job", "phase": "released", "session": name}));
         released
     };
@@ -276,7 +298,9 @@ async fn run_on(
     emit: &Emit,
 ) -> Result<(i64, Vec<Value>)> {
     let name = &spec.runtime.name;
-    emit(json!({"type": "job", "phase": "connecting", "session": name, "endpoint": endpoint, "hardware": hardware}));
+    emit(
+        json!({"type": "job", "phase": "connecting", "session": name, "endpoint": endpoint, "hardware": hardware}),
+    );
     let silent: Emit = Arc::new(|_| {});
     manager.execute(name, CHDIR_CONTENT, Duration::from_secs(120), false, &silent).await?;
 
@@ -300,11 +324,15 @@ async fn run_on(
     }
     emit(json!({"type": "job", "phase": "collecting", "session": name}));
     let (glob_emit, glob_seen) = tee(&silent);
-    manager.execute(name, &glob_code(&spec.artifacts), Duration::from_secs(120), false, &glob_emit).await?;
+    manager
+        .execute(name, &glob_code(&spec.artifacts), Duration::from_secs(120), false, &glob_emit)
+        .await?;
     let found = parse_glob_output(&glob_seen.lock().map(|seen| seen.clone()).unwrap_or_default());
     let Some(dir) = artifacts_dir else {
         for (path, size) in found {
-            emit(json!({"type": "artifact", "path": path, "size": size, "skipped": "no download folder"}));
+            emit(
+                json!({"type": "artifact", "path": path, "size": size, "skipped": "no download folder"}),
+            );
         }
         return Ok((code, artifacts));
     };
@@ -361,7 +389,12 @@ mod tests {
 
     #[test]
     fn plans_validate() {
-        let ok = plan(&JobRequest { script: "print(1)".into(), gpu: Some("t4".into()), ..JobRequest::default() }).unwrap();
+        let ok = plan(&JobRequest {
+            script: "print(1)".into(),
+            gpu: Some("t4".into()),
+            ..JobRequest::default()
+        })
+        .unwrap();
         assert_eq!(ok.filename, "script.py");
         assert!(ok.runtime.name.starts_with("run-"));
         assert_eq!(ok.runtime.label(), "T4");
@@ -388,7 +421,8 @@ mod tests {
             &["--epochs".into(), "3".into()],
             &[("SEED".into(), "7".into())],
         );
-        assert!(payload.starts_with("import sys, warnings\nsys.argv = [\"train.py\", \"--epochs\", \"3\"]\n"));
+        assert!(payload
+            .starts_with("import sys, warnings\nsys.argv = [\"train.py\", \"--epochs\", \"3\"]\n"));
         assert!(payload.contains("__name__ = '__main__'"));
         assert!(payload.contains("os.environ[\"SEED\"] = \"7\""));
         assert!(payload.ends_with("print(1)"));
@@ -413,7 +447,9 @@ mod tests {
         assert!(code.contains("_patterns = [\"out/*.bin\"]"));
         assert!(code.contains("{'path': _m, 'size': os.path.getsize(_m)}"));
         assert!(code.contains("print('__NZAP_ARTIFACTS__' + json.dumps(_found))"));
-        let events = vec![json!({"type": "stream", "text": "noise\n__NZAP_ARTIFACTS__[{\"path\": \"/content/out/a.bin\", \"size\": 9}]\n"})];
+        let events = vec![
+            json!({"type": "stream", "text": "noise\n__NZAP_ARTIFACTS__[{\"path\": \"/content/out/a.bin\", \"size\": 9}]\n"}),
+        ];
         assert_eq!(parse_glob_output(&events), vec![("/content/out/a.bin".to_owned(), 9)]);
         assert!(parse_glob_output(&[json!({"type": "stream", "text": "none"})]).is_empty());
     }
@@ -421,7 +457,10 @@ mod tests {
     #[test]
     fn artifact_paths_stay_inside_the_folder() {
         let dir = Path::new("/downloads/job");
-        assert_eq!(local_artifact_path(dir, "/content/out/a.bin"), Some(dir.join("out").join("a.bin")));
+        assert_eq!(
+            local_artifact_path(dir, "/content/out/a.bin"),
+            Some(dir.join("out").join("a.bin"))
+        );
         assert_eq!(local_artifact_path(dir, "/tmp/x.txt"), Some(dir.join("tmp").join("x.txt")));
         assert_eq!(local_artifact_path(dir, "/content/../etc/passwd"), None);
         assert_eq!(local_artifact_path(dir, "/content/"), None);

@@ -118,17 +118,20 @@ impl NotebookStore {
             .filter_map(|text| serde_json::from_str::<LocalNotebook>(&text).ok())
             .filter(|notebook| valid_id(&notebook.id))
             .collect();
-        notebooks.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
+        notebooks.sort_by_key(|notebook| notebook.title.to_lowercase());
         notebooks
     }
 
     pub fn get(&self, id: &str) -> Result<LocalNotebook> {
-        let text = std::fs::read_to_string(self.path(id)?).map_err(|_| Error::not_found("Notebook not found."))?;
+        let text = std::fs::read_to_string(self.path(id)?)
+            .map_err(|_| Error::not_found("Notebook not found."))?;
         serde_json::from_str(&text).map_err(|_| Error::internal("That notebook file is corrupt."))
     }
 
     fn slug_taken(&self, slug: &str, except: Option<&str>) -> bool {
-        self.list().iter().any(|notebook| notebook.slug == slug && Some(notebook.id.as_str()) != except)
+        self.list()
+            .iter()
+            .any(|notebook| notebook.slug == slug && Some(notebook.id.as_str()) != except)
     }
 
     fn save(&self, notebook: &LocalNotebook) -> Result<()> {
@@ -172,7 +175,10 @@ impl NotebookStore {
         draft.slug = draft.slug.trim().to_owned();
         check(&draft)?;
         if self.slug_taken(&draft.slug, Some(id)) {
-            return Err(Error::invalid(format!("You already have a notebook called '{}'.", draft.slug)));
+            return Err(Error::invalid(format!(
+                "You already have a notebook called '{}'.",
+                draft.slug
+            )));
         }
         notebook.slug = draft.slug;
         notebook.title = draft.title.trim().to_owned();
@@ -191,7 +197,8 @@ impl NotebookStore {
 
     /// A slug not yet used locally, based on `base` (`base`, `base-2`, …).
     pub fn free_slug(&self, base: &str) -> String {
-        let taken: std::collections::HashSet<String> = self.list().into_iter().map(|n| n.slug).collect();
+        let taken: std::collections::HashSet<String> =
+            self.list().into_iter().map(|n| n.slug).collect();
         if !taken.contains(base) {
             return base.to_owned();
         }
@@ -217,7 +224,8 @@ mod tests {
             title: format!("Title {slug}"),
             description: String::new(),
             source: "print(params['x'])".into(),
-            params: serde_json::from_value(json!([{"key": "x", "label": "X", "type": "string"}])).unwrap(),
+            params: serde_json::from_value(json!([{"key": "x", "label": "X", "type": "string"}]))
+                .unwrap(),
             forked_from: None,
         }
     }
@@ -234,17 +242,26 @@ mod tests {
         assert!(store.create(draft("mine")).is_err(), "slugs are unique");
 
         let updated = store
-            .update(&created.id, NotebookPatch { title: Some("Renamed".into()), ..NotebookPatch::default() })
+            .update(
+                &created.id,
+                NotebookPatch { title: Some("Renamed".into()), ..NotebookPatch::default() },
+            )
             .unwrap();
         assert_eq!(updated.title, "Renamed");
         assert_eq!(updated.source, created.source);
         assert!(store
-            .update(&created.id, NotebookPatch { source: Some("  ".into()), ..NotebookPatch::default() })
+            .update(
+                &created.id,
+                NotebookPatch { source: Some("  ".into()), ..NotebookPatch::default() }
+            )
             .is_err());
 
         let other = store.create(draft("other")).unwrap();
         assert!(store
-            .update(&other.id, NotebookPatch { slug: Some("mine".into()), ..NotebookPatch::default() })
+            .update(
+                &other.id,
+                NotebookPatch { slug: Some("mine".into()), ..NotebookPatch::default() }
+            )
             .is_err());
         assert_eq!(store.list().len(), 2);
 

@@ -39,7 +39,11 @@ pub fn notebook_create(state: State<'_, AppState>, draft: NotebookDraft) -> CmdR
 }
 
 #[tauri::command]
-pub fn notebook_update(state: State<'_, AppState>, id: String, patch: NotebookPatch) -> CmdResult<Notebook> {
+pub fn notebook_update(
+    state: State<'_, AppState>,
+    id: String,
+    patch: NotebookPatch,
+) -> CmdResult<Notebook> {
     state.engine.notebooks.update(&id, patch).map_err(Into::into)
 }
 
@@ -56,17 +60,32 @@ pub async fn notebook_fork(state: State<'_, AppState>, id: String) -> CmdResult<
 
 /// Save a notebook as `<slug>.nzap.json`.
 #[tauri::command]
-pub async fn notebook_export(app: AppHandle, state: State<'_, AppState>, id: String) -> CmdResult<Option<String>> {
+pub async fn notebook_export(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    id: String,
+) -> CmdResult<Option<String>> {
     let (filename, text) = state.engine.notebooks.export(&id).await?;
-    dialogs::save_bytes(&app, &filename, Some(("NZAP notebook", ["json"].as_slice())), text.into_bytes())
-        .await
-        .map_err(Into::into)
+    dialogs::save_bytes(
+        &app,
+        &filename,
+        Some(("NZAP notebook", ["json"].as_slice())),
+        text.into_bytes(),
+    )
+    .await
+    .map_err(Into::into)
 }
 
 /// Add a notebook from a `.nzap.json` file the user picks.
 #[tauri::command]
-pub async fn notebook_import(app: AppHandle, state: State<'_, AppState>) -> CmdResult<Option<Notebook>> {
-    let Some(file) = dialogs::pick_files(&app, Some(("NZAP notebook", ["json"].as_slice())), false).await?.into_iter().next()
+pub async fn notebook_import(
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> CmdResult<Option<Notebook>> {
+    let Some(file) = dialogs::pick_files(&app, Some(("NZAP notebook", ["json"].as_slice())), false)
+        .await?
+        .into_iter()
+        .next()
     else {
         return Ok(None);
     };

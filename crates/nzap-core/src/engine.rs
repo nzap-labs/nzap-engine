@@ -108,7 +108,10 @@ impl Engine {
             Arc::new(HistoryLog::new(paths.history_dir())),
             paths.sessions_file(),
         );
-        sessions.set_keepalive(current.keep_alive, Duration::from_secs(current.keep_alive_interval_seconds));
+        sessions.set_keepalive(
+            current.keep_alive,
+            Duration::from_secs(current.keep_alive_interval_seconds),
+        );
         let notebooks = NotebookLibrary::new(
             Catalog::new(http, &current.catalog_url, paths.catalog_cache_dir()),
             NotebookStore::new(paths.notebooks_dir()),
@@ -130,14 +133,20 @@ impl Engine {
     /// token is stored.
     pub async fn status(&self) -> ConnectionStatus {
         let snapshot = self.auth.snapshot().await;
-        let base = |connected: bool, reason: Option<&'static str>, warning: Option<String>| ConnectionStatus {
-            connected,
-            reason,
-            email: snapshot.user.as_ref().map(|user| user.email.clone()).filter(|email| !email.is_empty()),
-            user: snapshot.user.clone(),
-            warning,
-            storage: snapshot.storage,
-            custom_client: snapshot.custom_client,
+        let base = |connected: bool, reason: Option<&'static str>, warning: Option<String>| {
+            ConnectionStatus {
+                connected,
+                reason,
+                email: snapshot
+                    .user
+                    .as_ref()
+                    .map(|user| user.email.clone())
+                    .filter(|email| !email.is_empty()),
+                user: snapshot.user.clone(),
+                warning,
+                storage: snapshot.storage,
+                custom_client: snapshot.custom_client,
+            }
         };
         if !snapshot.has_credentials {
             let reason = match snapshot.reason {
@@ -151,7 +160,9 @@ impl Engine {
             Err(Error::AuthExpired(_) | Error::NotConnected) => base(false, Some("revoked"), None),
             Err(error) if matches!(error.status(), Some(401)) => base(false, Some("revoked"), None),
             // Colab itself is unreachable — the token is still good, say so.
-            Err(error) => base(true, None, Some(format!("Colab did not answer the liveness check: {error}"))),
+            Err(error) => {
+                base(true, None, Some(format!("Colab did not answer the liveness check: {error}")))
+            }
         }
     }
 
@@ -193,7 +204,10 @@ impl Engine {
 
     pub fn update_settings(&self, patch: SettingsPatch) -> Result<Settings> {
         let settings = self.settings.update(patch)?;
-        self.sessions.set_keepalive(settings.keep_alive, Duration::from_secs(settings.keep_alive_interval_seconds));
+        self.sessions.set_keepalive(
+            settings.keep_alive,
+            Duration::from_secs(settings.keep_alive_interval_seconds),
+        );
         if settings.keep_alive {
             for name in self.sessions.names() {
                 self.sessions.start_keepalive(&name);

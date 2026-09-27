@@ -42,9 +42,11 @@ fn build_state(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> 
     } else {
         Endpoints::default()
     };
-    let oauth_client = std::env::var("NZAP_OAUTH_CLIENT_JSON")
-        .ok()
-        .and_then(|json| OAuthClient::from_json(&json).map_err(|error| log::warn!("NZAP_OAUTH_CLIENT_JSON: {error}")).ok());
+    let oauth_client = std::env::var("NZAP_OAUTH_CLIENT_JSON").ok().and_then(|json| {
+        OAuthClient::from_json(&json)
+            .map_err(|error| log::warn!("NZAP_OAUTH_CLIENT_JSON: {error}"))
+            .ok()
+    });
     let engine = Engine::new(EngineOptions {
         paths,
         endpoints,

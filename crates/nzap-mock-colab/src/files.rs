@@ -32,7 +32,8 @@ async fn drive_file(
     Query(query): Query<HashMap<String, String>>,
 ) -> Response {
     let mock = state.lock().expect("mock state");
-    if !mock.is_authorized(headers.get(header::AUTHORIZATION).and_then(|value| value.to_str().ok())) {
+    if !mock.is_authorized(headers.get(header::AUTHORIZATION).and_then(|value| value.to_str().ok()))
+    {
         return StatusCode::UNAUTHORIZED.into_response();
     }
     let Some((name, content)) = mock.drive_files.get(&id) else {
@@ -44,7 +45,11 @@ async fn drive_file(
     Json(json!({ "name": name })).into_response()
 }
 
-async fn static_file(State(state): State<Shared>, Path(path): Path<String>, headers: HeaderMap) -> Response {
+async fn static_file(
+    State(state): State<Shared>,
+    Path(path): Path<String>,
+    headers: HeaderMap,
+) -> Response {
     let mut mock = state.lock().expect("mock state");
     *mock.static_hits.entry(path.clone()).or_default() += 1;
     let Some(content) = mock.static_files.get(&path).cloned() else {

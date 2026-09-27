@@ -48,7 +48,11 @@ pub struct PickedFile {
 }
 
 /// Ask for one or more files. Empty when the user cancels.
-pub async fn pick_files(app: &AppHandle, filter: Option<(&str, &[&str])>, multiple: bool) -> Result<Vec<PickedFile>> {
+pub async fn pick_files(
+    app: &AppHandle,
+    filter: Option<(&str, &[&str])>,
+    multiple: bool,
+) -> Result<Vec<PickedFile>> {
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut dialog = app.dialog().file();
     if let Some((label, extensions)) = filter {
@@ -84,7 +88,8 @@ pub async fn read_text(file: &PickedFile) -> Result<String> {
         return Err(Error::invalid(format!("{} is larger than 20 MB.", file.name)));
     }
     let bytes = tokio::fs::read(&file.path).await?;
-    String::from_utf8(bytes).map_err(|_| Error::invalid(format!("{} is not a text file.", file.name)))
+    String::from_utf8(bytes)
+        .map_err(|_| Error::invalid(format!("{} is not a text file.", file.name)))
 }
 
 /// Read a picked file for upload to a runtime.

@@ -29,7 +29,9 @@ pub fn open_external(app: &AppHandle, state: &AppState, url: &str) -> nzap_core:
     let parsed = url::Url::parse(url).map_err(|_| Error::invalid("That is not a valid link."))?;
     let loopback = matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"));
     // Plain http is only ever the local mock in development builds.
-    if parsed.scheme() != "https" && !(cfg!(debug_assertions) && loopback && parsed.scheme() == "http") {
+    if parsed.scheme() != "https"
+        && !(cfg!(debug_assertions) && loopback && parsed.scheme() == "http")
+    {
         return Err(Error::invalid("Only https:// links can be opened."));
     }
     if let Some(log) = &state.open_log {
@@ -92,14 +94,20 @@ pub fn settings_get(state: State<'_, AppState>) -> SettingsView {
 }
 
 #[tauri::command]
-pub fn settings_update(state: State<'_, AppState>, patch: SettingsPatch) -> CmdResult<SettingsView> {
+pub fn settings_update(
+    state: State<'_, AppState>,
+    patch: SettingsPatch,
+) -> CmdResult<SettingsView> {
     state.engine.update_settings(patch)?;
     Ok(settings_view(&state))
 }
 
 /// Bring your own OAuth client (`null` restores the built-in one).
 #[tauri::command]
-pub async fn settings_set_oauth_client(state: State<'_, AppState>, json: Option<String>) -> CmdResult<SettingsView> {
+pub async fn settings_set_oauth_client(
+    state: State<'_, AppState>,
+    json: Option<String>,
+) -> CmdResult<SettingsView> {
     if let Some(text) = json.as_deref() {
         OAuthClient::from_json(text)?;
     }

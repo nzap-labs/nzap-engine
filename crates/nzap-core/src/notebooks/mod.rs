@@ -142,8 +142,9 @@ impl NotebookLibrary {
     pub fn list(&self) -> Vec<Notebook> {
         let mut public: Vec<Notebook> =
             self.catalog.entries().into_iter().map(|entry| Notebook::public(entry, None)).collect();
-        public.sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase()));
-        public.extend(self.store.list().into_iter().map(|notebook| Notebook::local(notebook, false)));
+        public.sort_by_key(|notebook| notebook.title.to_lowercase());
+        public
+            .extend(self.store.list().into_iter().map(|notebook| Notebook::local(notebook, false)));
         public
     }
 
@@ -152,7 +153,10 @@ impl NotebookLibrary {
     pub async fn get(&self, id: &str) -> Result<Notebook> {
         match parse_id(id)? {
             Id::Public(slug) => {
-                let entry = self.catalog.entry(slug).ok_or_else(|| Error::not_found("Notebook not found."))?;
+                let entry = self
+                    .catalog
+                    .entry(slug)
+                    .ok_or_else(|| Error::not_found("Notebook not found."))?;
                 let source = self.catalog.source(slug).await?;
                 Ok(Notebook::public(entry, Some(source)))
             }
@@ -181,7 +185,8 @@ impl NotebookLibrary {
     /// Copy any notebook into your own collection.
     pub async fn fork(&self, id: &str) -> Result<Notebook> {
         let source = self.get(id).await?;
-        let forked_from = matches!(source.visibility, Visibility::Public).then(|| source.slug.clone());
+        let forked_from =
+            matches!(source.visibility, Visibility::Public).then(|| source.slug.clone());
         let draft = NotebookDraft {
             slug: self.store.free_slug(&source.slug),
             title: source.title,
@@ -209,8 +214,8 @@ impl NotebookLibrary {
 
     /// Add a notebook from an exported `.nzap.json` file.
     pub fn import(&self, text: &str) -> Result<Notebook> {
-        let file: NotebookFile =
-            serde_json::from_str(text).map_err(|_| Error::invalid("That is not an NZAP notebook file."))?;
+        let file: NotebookFile = serde_json::from_str(text)
+            .map_err(|_| Error::invalid("That is not an NZAP notebook file."))?;
         if file.format != NOTEBOOK_FILE_FORMAT {
             return Err(Error::invalid(format!("Unsupported notebook format '{}'.", file.format)));
         }
@@ -238,7 +243,8 @@ impl NotebookLibrary {
         manager.get(session)?;
         let notebook = self.get(id).await?;
         let resolved = params::resolve(&notebook.params, values)?;
-        let code = params::assemble_source(notebook.source.as_deref().unwrap_or_default(), &resolved);
+        let code =
+            params::assemble_source(notebook.source.as_deref().unwrap_or_default(), &resolved);
         manager.history().log(
             session,
             "automation",

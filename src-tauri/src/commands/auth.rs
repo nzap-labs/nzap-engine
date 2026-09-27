@@ -48,14 +48,21 @@ pub fn auth_cancel(state: State<'_, AppState>) {
 /// Start the copy/paste flow (for when the browser cannot reach this
 /// machine's loopback address). Returns the consent URL, also opened.
 #[tauri::command]
-pub fn auth_begin_remote(app: AppHandle, state: State<'_, AppState>, login_hint: Option<String>) -> CmdResult<String> {
+pub fn auth_begin_remote(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    login_hint: Option<String>,
+) -> CmdResult<String> {
     let url = state.engine.auth.begin_remote(login_hint.as_deref())?;
     open_external(&app, &state, &url)?;
     Ok(url)
 }
 
 #[tauri::command]
-pub async fn auth_complete_remote(state: State<'_, AppState>, code: String) -> CmdResult<GoogleUser> {
+pub async fn auth_complete_remote(
+    state: State<'_, AppState>,
+    code: String,
+) -> CmdResult<GoogleUser> {
     let user = state.engine.auth.complete_remote(&code).await?;
     state.engine.resume().await;
     Ok(user)

@@ -40,7 +40,9 @@ async fn install_uploads_requirements_and_logs_the_result() {
         "requirements": {"filename": "requirements.txt", "content": "torch\n"},
     }))
     .unwrap();
-    let status = automation::run(&manager, "box", Operation::Install, &request, &events.emit()).await.unwrap();
+    let status = automation::run(&manager, "box", Operation::Install, &request, &events.emit())
+        .await
+        .unwrap();
     assert_eq!(status, "ok");
 
     let lifecycle: Vec<Value> = events.of_type("automation");
@@ -68,19 +70,34 @@ async fn install_uploads_requirements_and_logs_the_result() {
 async fn drive_mount_and_cloud_auth() {
     let (_env, manager) = connected_runtime().await;
     let events = Events::default();
-    let mount = AutomationRequest { path: Some("/content/gdrive".into()), ..AutomationRequest::default() };
+    let mount =
+        AutomationRequest { path: Some("/content/gdrive".into()), ..AutomationRequest::default() };
     automation::run(&manager, "box", Operation::DriveMount, &mount, &events.emit()).await.unwrap();
     assert!(events.text().contains("Mounted at /content/drive"));
     assert!(manager.view("box").unwrap().drive_authorized);
 
     let events = Events::default();
-    automation::run(&manager, "box", Operation::GcpAuth, &AutomationRequest::default(), &events.emit())
-        .await
-        .unwrap();
+    automation::run(
+        &manager,
+        "box",
+        Operation::GcpAuth,
+        &AutomationRequest::default(),
+        &events.emit(),
+    )
+    .await
+    .unwrap();
     assert!(events.text().contains("Authenticated with Google Cloud."));
 
     let bad = AutomationRequest { path: Some("relative".into()), ..AutomationRequest::default() };
-    assert!(automation::run(&manager, "box", Operation::DriveMount, &bad, &Events::default().emit()).await.is_err());
+    assert!(automation::run(
+        &manager,
+        "box",
+        Operation::DriveMount,
+        &bad,
+        &Events::default().emit()
+    )
+    .await
+    .is_err());
 }
 
 // ------------------------------------------------------------------ run-file
@@ -145,7 +162,8 @@ async fn running_a_notebook_fills_in_outputs() {
     assert_eq!(markers.len(), 6);
     assert_eq!(markers[0], (json!(0), json!("started")));
 
-    let done = runfile::run(&manager, "box", &request(true), &Events::default().emit()).await.unwrap();
+    let done =
+        runfile::run(&manager, "box", &request(true), &Events::default().emit()).await.unwrap();
     assert_eq!(done["notebook"]["cells"][3]["outputs"], json!([]), "stop_on_error skips the rest");
 }
 
@@ -170,12 +188,17 @@ async fn a_job_runs_collects_artifacts_and_releases_the_vm() {
     })
     .unwrap();
     let events = Events::default();
-    let done = jobs::run(&manager, spec, Some(downloads.path().to_path_buf()), &events.emit()).await.unwrap();
+    let done = jobs::run(&manager, spec, Some(downloads.path().to_path_buf()), &events.emit())
+        .await
+        .unwrap();
 
     assert_eq!(done["exit_code"], 3);
     assert_eq!(done["released"], true);
-    let phases: Vec<String> =
-        events.of_type("job").iter().map(|event| event["phase"].as_str().unwrap().to_owned()).collect();
+    let phases: Vec<String> = events
+        .of_type("job")
+        .iter()
+        .map(|event| event["phase"].as_str().unwrap().to_owned())
+        .collect();
     assert_eq!(phases, vec!["assigning", "connecting", "running", "collecting", "released"]);
     assert_eq!(events.of_type("job")[0]["hardware"], "T4");
     // SystemExit is an exit code, not an error in the output.
@@ -192,7 +215,8 @@ async fn a_job_runs_collects_artifacts_and_releases_the_vm() {
     assert!(manager.views().is_empty());
     assert_eq!(env.mock.state().unassigned.len(), 1);
     let history = manager.history().get("train-job");
-    let result = history.iter().rev().find(|event| event["event_type"] == "automation_result").unwrap();
+    let result =
+        history.iter().rev().find(|event| event["event_type"] == "automation_result").unwrap();
     assert_eq!(result["exit_code"], 3);
 }
 
@@ -200,14 +224,17 @@ async fn a_job_runs_collects_artifacts_and_releases_the_vm() {
 async fn kept_jobs_and_refused_allocations() {
     let env = common::connected().await;
     let manager = env.manager();
-    let spec = jobs::plan(&JobRequest { script: "print(1)".into(), keep: true, ..JobRequest::default() }).unwrap();
+    let spec =
+        jobs::plan(&JobRequest { script: "print(1)".into(), keep: true, ..JobRequest::default() })
+            .unwrap();
     let name = spec.runtime.name.clone();
     let done = jobs::run(&manager, spec, None, &Events::default().emit()).await.unwrap();
     assert_eq!((done["exit_code"].clone(), done["released"].clone()), (json!(0), json!(false)));
     assert!(manager.get(&name).is_ok(), "kept jobs leave their runtime");
 
     env.mock.state().max_assignments = 1;
-    let spec = jobs::plan(&JobRequest { script: "print(1)".into(), ..JobRequest::default() }).unwrap();
+    let spec =
+        jobs::plan(&JobRequest { script: "print(1)".into(), ..JobRequest::default() }).unwrap();
     let done = jobs::run(&manager, spec, None, &Events::default().emit()).await.unwrap();
     assert_eq!(done["exit_code"], 1);
     assert!(done["error"].as_str().unwrap().contains("Allocation refused"));
@@ -219,32 +246,42 @@ async fn kept_jobs_and_refused_allocations() {
 async fn import_from_drive_and_https() {
     let env = common::connected().await;
     let notebook = json!({"cells": [], "nbformat": 4}).to_string();
-    env.mock.state().drive_files.insert("DriveId1".into(), ("model.ipynb".into(), notebook.clone()));
+    env.mock
+        .state()
+        .drive_files
+        .insert("DriveId1".into(), ("model.ipynb".into(), notebook.clone()));
     let permissive = ImportOptions { allow_private_hosts: true };
 
     // Drive ids resolve against the configured Drive endpoint.
     let from_drive =
-        import_from_url(&env.auth, "https://drive.google.com/file/d/DriveId1/view", permissive).await.unwrap();
+        import_from_url(&env.auth, "https://drive.google.com/file/d/DriveId1/view", permissive)
+            .await
+            .unwrap();
     assert_eq!((from_drive.filename.as_str(), from_drive.kind.as_str()), ("model.ipynb", "ipynb"));
     assert_eq!(from_drive.content, notebook);
-    let refused = import_from_url(&env.auth, "https://colab.research.google.com/drive/Nope", permissive).await;
+    let refused =
+        import_from_url(&env.auth, "https://colab.research.google.com/drive/Nope", permissive)
+            .await;
     assert!(refused.unwrap_err().to_string().contains("drive.file"));
 
     // Anything else must be https (the mock only speaks http).
-    let plain = import_from_url(&env.auth, &format!("{}/static/job.py", env.mock.base_url), permissive).await;
+    let plain =
+        import_from_url(&env.auth, &format!("{}/static/job.py", env.mock.base_url), permissive)
+            .await;
     assert!(plain.unwrap_err().to_string().contains("https://"));
 
     // The SSRF guard refuses private targets without the test override.
     let guarded =
-        import_from_url(&env.auth, "https://127.0.0.1/static/nb", ImportOptions::default()).await.unwrap_err();
+        import_from_url(&env.auth, "https://127.0.0.1/static/nb", ImportOptions::default())
+            .await
+            .unwrap_err();
     assert!(guarded.to_string().contains("private network"), "{guarded}");
 }
 
 // ----------------------------------------------------------------- notebooks
 
 fn host_catalog(env: &common::Connected) -> String {
-    let bundle: Value =
-        serde_json::from_str(include_str!("../catalog/bundled.json")).unwrap();
+    let bundle: Value = serde_json::from_str(include_str!("../catalog/bundled.json")).unwrap();
     let mut state = env.mock.state();
     let mut index = bundle.clone();
     for (position, entry) in bundle["notebooks"].as_array().unwrap().iter().enumerate() {
@@ -280,17 +317,18 @@ async fn catalog_refresh_integrity_and_running_notebooks() {
     assert_eq!(env.mock.state().static_hits["catalog/notebooks/print-notebook/notebook.py"], 1);
 
     // A tampered copy of a bundled notebook falls back to the verified bundle…
-    env.mock
-        .state()
-        .static_files
-        .insert("catalog/notebooks/gpu-check/notebook.py".into(), "import os; os.system('evil')\n".into());
+    env.mock.state().static_files.insert(
+        "catalog/notebooks/gpu-check/notebook.py".into(),
+        "import os; os.system('evil')\n".into(),
+    );
     let gpu = library.get("public:gpu-check").await.unwrap();
     assert!(!gpu.source.unwrap().contains("evil"));
 
     // …and one the app does not ship is refused outright.
     {
         let mut state = env.mock.state();
-        let mut index: Value = serde_json::from_str(&state.static_files["catalog/index.json"]).unwrap();
+        let mut index: Value =
+            serde_json::from_str(&state.static_files["catalog/index.json"]).unwrap();
         index["notebooks"].as_array_mut().unwrap().push(json!({
             "slug": "extra-one",
             "title": "Extra",
@@ -299,7 +337,9 @@ async fn catalog_refresh_integrity_and_running_notebooks() {
             "params": [],
         }));
         state.static_files.insert("catalog/index.json".into(), index.to_string());
-        state.static_files.insert("catalog/notebooks/extra-one/notebook.py".into(), "print(2)\n".into());
+        state
+            .static_files
+            .insert("catalog/notebooks/extra-one/notebook.py".into(), "print(2)\n".into());
     }
     assert_eq!(library.catalog().refresh().await.count, 6);
     let tampered = library.get("public:extra-one").await.unwrap_err();
@@ -309,8 +349,10 @@ async fn catalog_refresh_integrity_and_running_notebooks() {
     let events = Events::default();
     let mut values = Map::new();
     values.insert("string_to_print".into(), json!("Hi from the test"));
-    let reply =
-        library.run(&manager, "public:print-notebook", "box", &values, &events.emit()).await.unwrap();
+    let reply = library
+        .run(&manager, "public:print-notebook", "box", &values, &events.emit())
+        .await
+        .unwrap();
     assert_eq!(reply["status"], "ok");
     assert_eq!(events.text(), "Hi from the test\n");
     let code = executed(&env, &manager).last().unwrap().clone();
@@ -325,13 +367,16 @@ async fn catalog_refresh_integrity_and_running_notebooks() {
             slug: "needs-count".into(),
             title: "Needs count".into(),
             source: "print(params['n'])".into(),
-            params: serde_json::from_value(json!([{"key": "n", "label": "Count", "type": "integer", "required": true}]))
-                .unwrap(),
+            params: serde_json::from_value(
+                json!([{"key": "n", "label": "Count", "type": "integer", "required": true}]),
+            )
+            .unwrap(),
             ..NotebookDraft::default()
         })
         .unwrap();
     let before = executed(&env, &manager).len();
-    let error = library.run(&manager, &local.id, "box", &bad, &Events::default().emit()).await.unwrap_err();
+    let error =
+        library.run(&manager, &local.id, "box", &bad, &Events::default().emit()).await.unwrap_err();
     assert_eq!(error.to_string(), "Count is required.");
     assert_eq!(executed(&env, &manager).len(), before);
 }
@@ -340,7 +385,11 @@ async fn catalog_refresh_integrity_and_running_notebooks() {
 async fn an_unreachable_catalog_falls_back_to_the_bundle() {
     let env = common::connected().await;
     let library = NotebookLibrary::new(
-        Catalog::new(env.auth.http().clone(), &format!("{}/static/missing/", env.mock.base_url), env.dir.path().join("c")),
+        Catalog::new(
+            env.auth.http().clone(),
+            &format!("{}/static/missing/", env.mock.base_url),
+            env.dir.path().join("c"),
+        ),
         NotebookStore::new(env.dir.path().join("n")),
     );
     let status = library.catalog().refresh().await;

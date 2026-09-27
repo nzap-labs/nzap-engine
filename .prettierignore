@@ -6,3 +6,5 @@ src-tauri/icons
 src/routeTree.gen.ts
 package-lock.json
 LICENSE
+crates
+src-tauri
