@@ -8,5 +8,32 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+default = ["keychain"]
+# Store the Google refresh token in the OS keychain (falls back to a 0600
+# file at runtime when no keychain is reachable).
+keychain = ["dep:keyring"]
+
+[dependencies]
+base64 = "0.22"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std", "serde"] }
+keyring = { version = "3", optional = true, features = ["apple-native", "windows-native", "sync-secret-service", "crypto-rust"] }
+percent-encoding = "2"
+rand = "0.8"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "http2", "charset", "stream", "multipart"] }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+url = "2"
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[dev-dependencies]
+nzap-mock-colab.workspace = true
+tempfile = "3"
+tokio = { workspace = true, features = ["full"] }
+
 [lints]
 workspace = true

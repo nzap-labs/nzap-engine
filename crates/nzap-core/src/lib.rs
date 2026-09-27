@@ -6,8 +6,20 @@
 //! library. It has no Tauri dependency so the whole engine is testable with
 //! plain `cargo test` against `nzap-mock-colab`.
 
-/// The engine version, reported in the app's About panel and client agent.
+pub mod auth;
+pub mod config;
+pub mod error;
+pub mod http;
+pub mod paths;
+pub mod secrets;
+
+pub use error::{Error, ErrorCode, ErrorPayload, Result};
+
+/// The engine version, reported in the app's About panel and user agent.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// Service name under which secrets are stored in the OS keychain.
+pub const KEYCHAIN_SERVICE: &str = "com.nzaplabs.engine";
 
 #[cfg(test)]
 mod tests {
