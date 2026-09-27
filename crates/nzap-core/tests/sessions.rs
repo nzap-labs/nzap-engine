@@ -79,7 +79,9 @@ async fn create_connect_and_run_cells() {
     // The kernel state is visible while connected.
     assert_eq!(manager.view("box").unwrap().kernel_state.as_deref(), Some("idle"));
     assert!(matches!(
-        manager.execute("box", "  ", DEFAULT_EXECUTE_TIMEOUT, true, &Events::default().emit()).await,
+        manager
+            .execute("box", "  ", DEFAULT_EXECUTE_TIMEOUT, true, &Events::default().emit())
+            .await,
         Err(Error::InvalidInput(_))
     ));
 }
@@ -95,7 +97,9 @@ async fn input_prompts_are_answered_through_stdin() {
         let manager = manager.clone();
         let emit = events.emit();
         tokio::spawn(async move {
-            manager.execute("box", "name = input(\"Name? \")", DEFAULT_EXECUTE_TIMEOUT, true, &emit).await
+            manager
+                .execute("box", "name = input(\"Name? \")", DEFAULT_EXECUTE_TIMEOUT, true, &emit)
+                .await
         })
     };
     wait_until("input_request", || !events.of_type("input_request").is_empty()).await;
@@ -114,7 +118,8 @@ async fn drive_mount_with_existing_consent_propagates_and_resumes() {
     let manager = env.manager();
     manager.create_and_connect(request("box")).await.unwrap();
 
-    let (reply, events) = run(&manager, "box", "from google.colab import drive\ndrive.mount('/content/drive')").await;
+    let (reply, events) =
+        run(&manager, "box", "from google.colab import drive\ndrive.mount('/content/drive')").await;
     assert_eq!(reply["status"], "ok");
     let notes: Vec<String> = events
         .of_type("colab_request")
@@ -145,7 +150,13 @@ async fn missing_consent_pauses_the_cell_until_authorized() {
         let emit = events.emit();
         tokio::spawn(async move {
             manager
-                .execute("box", "from google.colab import auth\nauth.authenticate_user()", DEFAULT_EXECUTE_TIMEOUT, true, &emit)
+                .execute(
+                    "box",
+                    "from google.colab import auth\nauth.authenticate_user()",
+                    DEFAULT_EXECUTE_TIMEOUT,
+                    true,
+                    &emit,
+                )
                 .await
         })
     };
@@ -186,7 +197,9 @@ async fn interrupting_a_running_cell() {
         let manager = manager.clone();
         let emit = events.emit();
         tokio::spawn(async move {
-            manager.execute("box", "wait_for_interrupt()", DEFAULT_EXECUTE_TIMEOUT, true, &emit).await
+            manager
+                .execute("box", "wait_for_interrupt()", DEFAULT_EXECUTE_TIMEOUT, true, &emit)
+                .await
         })
     };
     wait_until("busy", || !events.of_type("status").is_empty()).await;
@@ -207,7 +220,9 @@ async fn a_cancelled_stream_is_recorded_as_interrupted() {
         let manager = manager.clone();
         let emit = events.emit();
         tokio::spawn(async move {
-            manager.execute("box", "wait_for_interrupt()", DEFAULT_EXECUTE_TIMEOUT, true, &emit).await
+            manager
+                .execute("box", "wait_for_interrupt()", DEFAULT_EXECUTE_TIMEOUT, true, &emit)
+                .await
         })
     };
     wait_until("busy", || !events.of_type("status").is_empty()).await;
@@ -258,7 +273,12 @@ async fn files_through_the_manager_are_logged() {
         listing.entries.iter().map(|entry| (entry.kind.as_str(), entry.name.as_str())).collect();
     assert_eq!(
         names,
-        vec![("directory", "dir"), ("directory", "sample_data"), ("file", "a.py"), ("file", "b.bin")]
+        vec![
+            ("directory", "dir"),
+            ("directory", "sample_data"),
+            ("file", "a.py"),
+            ("file", "b.bin")
+        ]
     );
     assert_eq!(listing.entries[2].size, Some(8));
     assert_eq!(manager.read_file("box", "content/a.py").await.unwrap()["content"], "print(1)");

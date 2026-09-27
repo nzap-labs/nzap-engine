@@ -166,7 +166,9 @@ pub fn plan(op: Operation, request: &AutomationRequest) -> Result<Plan> {
                 .unwrap_or("/content/drive")
                 .to_owned();
             if !path.starts_with('/') {
-                return Err(Error::invalid("The mount path must be absolute, e.g. /content/drive."));
+                return Err(Error::invalid(
+                    "The mount path must be absolute, e.g. /content/drive.",
+                ));
             }
             Ok(Plan {
                 code: drivemount_code(&path),
@@ -254,7 +256,12 @@ pub async fn run(
     emit(json!({ "type": "automation", "op": op.as_str(), "state": "started" }));
     let (tee, seen) = tee(emit);
     let status = {
-        let _log = ResultLog { manager: manager.clone(), name: name.to_owned(), op: op.as_str(), seen: seen.clone() };
+        let _log = ResultLog {
+            manager: manager.clone(),
+            name: name.to_owned(),
+            op: op.as_str(),
+            seen: seen.clone(),
+        };
         manager.execute(name, &plan.code, plan.timeout, false, &tee).await?;
         let seen = seen.lock().map(|seen| seen.clone()).unwrap_or_default();
         last_status(&seen)
@@ -273,14 +280,18 @@ mod tests {
 
     #[test]
     fn install_plans() {
-        let plan = plan(Operation::Install, &request(json!({"packages": [" numpy ", "", "pandas==2.2"]}))).unwrap();
+        let plan =
+            plan(Operation::Install, &request(json!({"packages": [" numpy ", "", "pandas==2.2"]})))
+                .unwrap();
         assert!(plan.code.contains("packages = [\"numpy\", \"pandas==2.2\"]"));
         assert!(plan.code.contains("['uv', 'pip', 'install', '--system']"));
         assert!(plan.code.contains("[sys.executable, '-m', 'pip', 'install']"));
         assert_eq!(plan.timeout, INSTALL_TIMEOUT);
         assert_eq!(plan.upload, None);
 
-        let with_file = plan_for(json!({"requirements": {"filename": "../../etc/reqs.txt", "content": "torch\n"}}));
+        let with_file = plan_for(
+            json!({"requirements": {"filename": "../../etc/reqs.txt", "content": "torch\n"}}),
+        );
         assert_eq!(with_file.upload, Some(("content/reqs.txt".into(), "torch\n".into())));
         assert!(with_file.code.contains("[\"-r\", \"/content/reqs.txt\"]"));
 
@@ -304,7 +315,10 @@ mod tests {
         assert_eq!(lines[2], "def install():");
         assert_eq!(lines[3], "    packages = [\"a\"]");
         assert_eq!(lines[4], "    try:");
-        assert_eq!(lines[5], "        subprocess.check_call(['uv', 'pip', 'install', '--system'] + packages)");
+        assert_eq!(
+            lines[5],
+            "        subprocess.check_call(['uv', 'pip', 'install', '--system'] + packages)"
+        );
         assert_eq!(lines[7], "    except:");
         assert_eq!(lines.last(), Some(&"install()"));
     }
@@ -314,10 +328,14 @@ mod tests {
         let default = plan(Operation::DriveMount, &request(json!({}))).unwrap();
         assert_eq!(default.code, "from google.colab import drive\ndrive.mount(\"/content/drive\")");
         assert_eq!(default.timeout, INTERACTIVE_TIMEOUT);
-        let injected = plan(Operation::DriveMount, &request(json!({"path": "/x')\nimport os#"}))).unwrap();
+        let injected =
+            plan(Operation::DriveMount, &request(json!({"path": "/x')\nimport os#"}))).unwrap();
         assert!(injected.code.ends_with("drive.mount(\"/x')\\nimport os#\")"));
         assert!(plan(Operation::DriveMount, &request(json!({"path": "relative"}))).is_err());
-        assert!(plan(Operation::GcpAuth, &request(json!({}))).unwrap().code.contains("authenticate_user()"));
+        assert!(plan(Operation::GcpAuth, &request(json!({})))
+            .unwrap()
+            .code
+            .contains("authenticate_user()"));
         assert!(Operation::parse("rm -rf").is_err());
         assert_eq!(Operation::parse("gcp-auth").unwrap().as_str(), "gcp-auth");
     }

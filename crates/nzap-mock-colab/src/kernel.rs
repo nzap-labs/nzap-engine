@@ -48,7 +48,8 @@ async fn channels(
         if let Err(response) = check_runtime_token(&mock, &endpoint, &headers, &query) {
             return response;
         }
-        let known = mock.runtime(&endpoint).is_some_and(|runtime| runtime.kernels.contains(&kernel));
+        let known =
+            mock.runtime(&endpoint).is_some_and(|runtime| runtime.kernels.contains(&kernel));
         if !known {
             return (StatusCode::NOT_FOUND, "no such kernel").into_response();
         }
@@ -69,7 +70,13 @@ struct Kernel {
     params: Value,
 }
 
-fn message(parent: &Value, channel: &str, msg_type: &str, content: Value, metadata: Value) -> Message {
+fn message(
+    parent: &Value,
+    channel: &str,
+    msg_type: &str,
+    content: Value,
+    metadata: Value,
+) -> Message {
     let frame = json!({
         "header": {
             "msg_id": format!("mock-{msg_type}-{}", uniq()),
@@ -101,7 +108,8 @@ fn print_arg(line: &str, params: &Value) -> Option<String> {
             return Some(inner[1..inner.len() - 1].to_owned());
         }
     }
-    let key = inner.strip_prefix("params[")?.strip_suffix(']')?.trim_matches(|c| c == '"' || c == '\'');
+    let key =
+        inner.strip_prefix("params[")?.strip_suffix(']')?.trim_matches(|c| c == '"' || c == '\'');
     Some(match params.get(key) {
         Some(Value::String(text)) => text.clone(),
         Some(other) => other.to_string(),
@@ -129,23 +137,45 @@ impl Kernel {
         }
     }
 
-    async fn send(&self, socket: &mut WebSocket, parent: &Value, channel: &str, msg_type: &str, content: Value) -> Result<(), axum::Error> {
+    async fn send(
+        &self,
+        socket: &mut WebSocket,
+        parent: &Value,
+        channel: &str,
+        msg_type: &str,
+        content: Value,
+    ) -> Result<(), axum::Error> {
         socket.send(message(parent, channel, msg_type, content, json!({}))).await
     }
 
-    async fn finish(&self, socket: &mut WebSocket, parent: &Value, status: &str, count: u64) -> Result<(), axum::Error> {
-        self.send(socket, parent, "shell", "execute_reply", json!({"status": status, "execution_count": count})).await?;
+    async fn finish(
+        &self,
+        socket: &mut WebSocket,
+        parent: &Value,
+        status: &str,
+        count: u64,
+    ) -> Result<(), axum::Error> {
+        self.send(
+            socket,
+            parent,
+            "shell",
+            "execute_reply",
+            json!({"status": status, "execution_count": count}),
+        )
+        .await?;
         self.send(socket, parent, "iopub", "status", json!({"execution_state": "idle"})).await
     }
 
     async fn handle(&mut self, socket: &mut WebSocket, incoming: Value) -> Result<(), axum::Error> {
         let parent = incoming.get("header").cloned().unwrap_or_else(|| json!({}));
-        let msg_type = parent.get("msg_type").and_then(Value::as_str).unwrap_or_default().to_owned();
+        let msg_type =
+            parent.get("msg_type").and_then(Value::as_str).unwrap_or_default().to_owned();
         let content = incoming.get("content").cloned().unwrap_or_else(|| json!({}));
 
         match msg_type.as_str() {
             "kernel_info_request" => {
-                self.send(socket, &parent, "iopub", "status", json!({"execution_state": "busy"})).await?;
+                self.send(socket, &parent, "iopub", "status", json!({"execution_state": "busy"}))
+                    .await?;
                 self.send(
                     socket,
                     &parent,
@@ -159,10 +189,12 @@ impl Kernel {
                     }),
                 )
                 .await?;
-                self.send(socket, &parent, "iopub", "status", json!({"execution_state": "idle"})).await
+                self.send(socket, &parent, "iopub", "status", json!({"execution_state": "idle"}))
+                    .await
             }
             "execute_request" => {
-                let code = content.get("code").and_then(Value::as_str).unwrap_or_default().to_owned();
+                let code =
+                    content.get("code").and_then(Value::as_str).unwrap_or_default().to_owned();
                 self.execute(socket, parent, code).await
             }
             "input_reply" => {
@@ -170,8 +202,14 @@ impl Kernel {
                 match self.paused.take() {
                     Some(Paused::Input { parent, count }) => {
                         let name = value.as_str().unwrap_or_default().to_owned();
-                        self.send(socket, &parent, "iopub", "stream", json!({"name": "stdout", "text": format!("Hello, {name}!\n")}))
-                            .await?;
+                        self.send(
+                            socket,
+                            &parent,
+                            "iopub",
+                            "stream",
+                            json!({"name": "stdout", "text": format!("Hello, {name}!\n")}),
+                        )
+                        .await?;
                         self.finish(socket, &parent, "ok", count).await
                     }
                     Some(Paused::Colab { parent, count, auth_type })
@@ -182,7 +220,14 @@ impl Kernel {
                         } else {
                             "Authenticated with Google Cloud.\n"
                         };
-                        self.send(socket, &parent, "iopub", "stream", json!({"name": "stdout", "text": text})).await?;
+                        self.send(
+                            socket,
+                            &parent,
+                            "iopub",
+                            "stream",
+                            json!({"name": "stdout", "text": text}),
+                        )
+                        .await?;
                         self.finish(socket, &parent, "ok", count).await
                     }
                     other => {
@@ -195,11 +240,22 @@ impl Kernel {
         }
     }
 
-    async fn stream(&self, socket: &mut WebSocket, parent: &Value, text: String) -> Result<(), axum::Error> {
+    async fn stream(
+        &self,
+        socket: &mut WebSocket,
+        parent: &Value,
+        text: String,
+    ) -> Result<(), axum::Error> {
         self.send(socket, parent, "iopub", "stream", json!({"name": "stdout", "text": text})).await
     }
 
-    async fn error(&self, socket: &mut WebSocket, parent: &Value, ename: &str, evalue: &str) -> Result<(), axum::Error> {
+    async fn error(
+        &self,
+        socket: &mut WebSocket,
+        parent: &Value,
+        ename: &str,
+        evalue: &str,
+    ) -> Result<(), axum::Error> {
         self.send(
             socket,
             parent,
@@ -210,7 +266,12 @@ impl Kernel {
         .await
     }
 
-    async fn execute(&mut self, socket: &mut WebSocket, parent: Value, code: String) -> Result<(), axum::Error> {
+    async fn execute(
+        &mut self,
+        socket: &mut WebSocket,
+        parent: Value,
+        code: String,
+    ) -> Result<(), axum::Error> {
         self.count += 1;
         let count = self.count;
         let interrupts_before = {
@@ -224,8 +285,14 @@ impl Kernel {
         .unwrap_or_default();
 
         self.send(socket, &parent, "iopub", "status", json!({"execution_state": "busy"})).await?;
-        self.send(socket, &parent, "iopub", "execute_input", json!({"code": code, "execution_count": count}))
-            .await?;
+        self.send(
+            socket,
+            &parent,
+            "iopub",
+            "execute_input",
+            json!({"code": code, "execution_count": count}),
+        )
+        .await?;
 
         if code.contains("drive.mount(") || code.contains("authenticate_user(") {
             let auth_type =
@@ -243,8 +310,14 @@ impl Kernel {
             return Ok(());
         }
         if code.contains("input(") {
-            self.send(socket, &parent, "stdin", "input_request", json!({"prompt": "Name? ", "password": false}))
-                .await?;
+            self.send(
+                socket,
+                &parent,
+                "stdin",
+                "input_request",
+                json!({"prompt": "Name? ", "password": false}),
+            )
+            .await?;
             self.paused = Some(Paused::Input { parent, count });
             return Ok(());
         }
@@ -253,7 +326,9 @@ impl Kernel {
             loop {
                 let interrupted = {
                     let mock = self.state.lock().expect("mock state");
-                    mock.runtime(&self.endpoint).map(|runtime| runtime.interrupts).unwrap_or_default()
+                    mock.runtime(&self.endpoint)
+                        .map(|runtime| runtime.interrupts)
+                        .unwrap_or_default()
                         > interrupts_before
                 };
                 if interrupted || Instant::now() > deadline {
@@ -316,7 +391,8 @@ impl Kernel {
                     })
                     .unwrap_or_default()
             };
-            self.stream(socket, &parent, format!("__NZAP_ARTIFACTS__{}\n", Value::from(found))).await?;
+            self.stream(socket, &parent, format!("__NZAP_ARTIFACTS__{}\n", Value::from(found)))
+                .await?;
         }
         if code.contains("answer") {
             self.send(

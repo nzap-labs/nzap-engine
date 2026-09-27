@@ -74,7 +74,9 @@ async fn shell(mut socket: WebSocket, state: Shared, endpoint: String) {
             continue;
         };
         let Ok(value) = serde_json::from_str::<Value>(text.as_str()) else { continue };
-        if let (Some(cols), Some(rows)) = (value.get("cols").and_then(Value::as_u64), value.get("rows").and_then(Value::as_u64)) {
+        if let (Some(cols), Some(rows)) =
+            (value.get("cols").and_then(Value::as_u64), value.get("rows").and_then(Value::as_u64))
+        {
             state.lock().expect("mock state").tty_resizes.push((endpoint.clone(), cols, rows));
             continue;
         }
