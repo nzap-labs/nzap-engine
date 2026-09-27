@@ -113,3 +113,68 @@ pub fn emit_to(channel: Channel<Value>) -> Emit {
         let _ = channel.send(event);
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use nzap_core::config::Endpoints;
+    use nzap_core::paths::AppPaths;
+    use nzap_core::{EngineOptions, ErrorCode};
+
+    use super::*;
+
+    fn state(dir: &std::path::Path) -> AppState {
+        let engine = Engine::new(EngineOptions {
+            paths: AppPaths::under(dir),
+            endpoints: Endpoints::single_host("http://127.0.0.1:9"),
+            use_keychain: false,
+            oauth_client: None,
+        })
+        .unwrap();
+        AppState::new(engine, None)
+    }
+
+    #[tokio::test]
+    async fn streams_return_results_and_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path());
+        assert_eq!(state.run_stream(None, async { Ok(7) }).await, Ok(7));
+        let failed = state
+            .run_stream(None, async { Err::<(), _>(Error::invalid("bad input")) })
+            .await
+            .unwrap_err();
+        assert_eq!(failed.code, ErrorCode::InvalidInput);
+        assert_eq!(failed.message, "bad input");
+    }
+
+    #[tokio::test]
+    async fn streams_are_cancelled_by_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path());
+        assert!(!state.cancel_stream("nothing-running"));
+        let work = state.run_stream(Some("cell-1".into()), async {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            Ok(())
+        });
+        let cancel = async {
+            tokio::time::sleep(Duration::from_millis(50)).await;
+            assert!(state.cancel_stream("cell-1"));
+        };
+        let (result, ()) = tokio::join!(work, cancel);
+        assert_eq!(result.unwrap_err().code, ErrorCode::Cancelled);
+        // Finished streams are forgotten.
+        assert!(!state.cancel_stream("cell-1"));
+    }
+
+    #[tokio::test]
+    async fn engine_errors_cross_ipc_as_code_and_message() {
+        let dir = tempfile::tempdir().unwrap();
+        let state = state(dir.path());
+        let status = state.engine.status().await;
+        assert_eq!(status.reason, Some("not_connected"));
+        let payload = serde_json::to_value(ErrorPayload::from(Error::NotConnected)).unwrap();
+        assert_eq!(payload["code"], "not_connected");
+        assert!(payload.get("status").is_none());
+    }
+}

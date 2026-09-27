@@ -26,14 +26,7 @@ pub fn app_info() -> AppInfo {
 /// Open an `https://` link in the user's browser. Nothing else is allowed
 /// out of the webview.
 pub fn open_external(app: &AppHandle, state: &AppState, url: &str) -> nzap_core::Result<()> {
-    let parsed = url::Url::parse(url).map_err(|_| Error::invalid("That is not a valid link."))?;
-    let loopback = matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"));
-    // Plain http is only ever the local mock in development builds.
-    if parsed.scheme() != "https"
-        && !(cfg!(debug_assertions) && loopback && parsed.scheme() == "http")
-    {
-        return Err(Error::invalid("Only https:// links can be opened."));
-    }
+    check_external_url(url)?;
     if let Some(log) = &state.open_log {
         use std::io::Write as _;
         let mut file = std::fs::OpenOptions::new().create(true).append(true).open(log)?;
@@ -43,6 +36,20 @@ pub fn open_external(app: &AppHandle, state: &AppState, url: &str) -> nzap_core:
     app.opener()
         .open_url(url, None::<&str>)
         .map_err(|error| Error::internal(format!("Could not open the browser: {error}")))
+}
+
+/// Only `https://` leaves the app (plain `http://` to loopback is allowed in
+/// development builds, for the mock Google server).
+pub fn check_external_url(url: &str) -> nzap_core::Result<()> {
+    let parsed = url::Url::parse(url).map_err(|_| Error::invalid("That is not a valid link."))?;
+    let loopback = matches!(parsed.host_str(), Some("127.0.0.1" | "localhost"));
+    let allowed = parsed.scheme() == "https"
+        || (cfg!(debug_assertions) && loopback && parsed.scheme() == "http");
+    if allowed {
+        Ok(())
+    } else {
+        Err(Error::invalid("Only https:// links can be opened."))
+    }
 }
 
 #[tauri::command]
@@ -125,4 +132,29 @@ pub async fn settings_set_oauth_client(
     }
     state.engine.set_oauth_client(json.as_deref()).await?;
     Ok(settings_view(&state))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_https_leaves_the_app() {
+        assert!(check_external_url("https://colab.research.google.com/notebooks").is_ok());
+        assert!(check_external_url("https://accounts.google.com/o/oauth2/v2/auth?x=1").is_ok());
+        for refused in [
+            "http://example.com/",
+            "file:///etc/passwd",
+            "javascript:alert(1)",
+            "ms-settings:privacy",
+            "not a url",
+        ] {
+            assert!(check_external_url(refused).is_err(), "{refused}");
+        }
+        // The loopback exception exists only in development builds.
+        assert_eq!(
+            check_external_url("http://127.0.0.1:9/auth").is_ok(),
+            cfg!(debug_assertions)
+        );
+    }
 }
