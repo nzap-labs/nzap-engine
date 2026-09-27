@@ -44,18 +44,11 @@ pub enum Error {
     /// A Colab control-plane request failed. `body` is kept for callers that
     /// need to inspect it (consent redirects) and is never shown verbatim.
     #[error("{message}")]
-    Colab {
-        status: Option<u16>,
-        message: String,
-        body: String,
-    },
+    Colab { status: Option<u16>, message: String, body: String },
 
     /// The runtime's Jupyter server (via its proxy) failed.
     #[error("{message}")]
-    Runtime {
-        status: Option<u16>,
-        message: String,
-    },
+    Runtime { status: Option<u16>, message: String },
 
     /// Network-level failure (DNS, TLS, timeout). URLs are stripped because
     /// runtime-proxy URLs carry tokens in their query strings.
@@ -141,18 +134,11 @@ impl Error {
     }
 
     pub fn runtime(status: Option<u16>, message: impl Into<String>) -> Self {
-        Self::Runtime {
-            status,
-            message: message.into(),
-        }
+        Self::Runtime { status, message: message.into() }
     }
 
     pub fn payload(&self) -> ErrorPayload {
-        ErrorPayload {
-            code: self.code(),
-            message: self.to_string(),
-            status: self.status(),
-        }
+        ErrorPayload { code: self.code(), message: self.to_string(), status: self.status() }
     }
 }
 
@@ -215,11 +201,7 @@ mod tests {
         };
         assert!(!error.to_string().contains("secret"));
         assert!(!error.is_auth_failure());
-        let auth = Error::Colab {
-            status: Some(401),
-            message: String::new(),
-            body: String::new(),
-        };
+        let auth = Error::Colab { status: Some(401), message: String::new(), body: String::new() };
         assert!(auth.is_auth_failure());
     }
 }

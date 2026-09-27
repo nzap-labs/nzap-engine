@@ -74,7 +74,8 @@ pub const USERINFO_URI: &str = "https://openidconnect.googleapis.com/v1/userinfo
 
 /// google-colab-cli/src/colab_cli/auth.py: `REMOTE_REDIRECT_URI` — the
 /// copy/paste landing page registered to the default client.
-pub const REMOTE_REDIRECT_URI: &str = "https://sdk.cloud.google.com/applicationdefaultauthcode.html";
+pub const REMOTE_REDIRECT_URI: &str =
+    "https://sdk.cloud.google.com/applicationdefaultauthcode.html";
 
 /// google-colab-cli/src/colab_cli/oauth_config.json — the installed-app
 /// client Google ships with the Cloud SDK, reused by colab-cli. Installed-app
@@ -152,9 +153,7 @@ impl Endpoints {
 
     /// Host of the Colab front door; requests to it carry `authuser=0`.
     pub fn colab_host(&self) -> Option<String> {
-        url::Url::parse(&self.colab)
-            .ok()
-            .and_then(|url| url.host_str().map(str::to_owned))
+        url::Url::parse(&self.colab).ok().and_then(|url| url.host_str().map(str::to_owned))
     }
 }
 
@@ -275,23 +274,13 @@ pub fn resolve_runtime_options(
         value.filter(|text| !text.trim().is_empty())
     }
     let (variant, accelerator) = if let Some(tpu) = non_empty(tpu) {
-        (
-            Variant::Tpu,
-            Accelerator::from_tpu_choice(tpu).unwrap_or(Accelerator::V6e1),
-        )
+        (Variant::Tpu, Accelerator::from_tpu_choice(tpu).unwrap_or(Accelerator::V6e1))
     } else if let Some(gpu) = non_empty(gpu) {
-        (
-            Variant::Gpu,
-            Accelerator::from_gpu_choice(gpu).unwrap_or(Accelerator::A100),
-        )
+        (Variant::Gpu, Accelerator::from_gpu_choice(gpu).unwrap_or(Accelerator::A100))
     } else {
         (Variant::Default, Accelerator::None)
     };
-    (
-        variant,
-        accelerator,
-        resolve_assign_shape(accelerator, high_mem),
-    )
+    (variant, accelerator, resolve_assign_shape(accelerator, high_mem))
 }
 
 /// `NONE` → `CPU`; everything else passes through.
@@ -314,11 +303,8 @@ pub fn shape_display_label(shape: &str) -> &'static str {
 
 /// Python's `urllib.parse.quote(value, safe='')`: everything but RFC 3986
 /// unreserved characters is escaped (so `/` becomes `%2F`).
-pub const QUOTE_SAFE_NONE: &percent_encoding::AsciiSet = &percent_encoding::NON_ALPHANUMERIC
-    .remove(b'-')
-    .remove(b'_')
-    .remove(b'.')
-    .remove(b'~');
+pub const QUOTE_SAFE_NONE: &percent_encoding::AsciiSet =
+    &percent_encoding::NON_ALPHANUMERIC.remove(b'-').remove(b'_').remove(b'.').remove(b'~');
 
 /// Browser URL that opens Colab's web UI attached to an existing VM.
 ///
@@ -362,11 +348,7 @@ impl RuntimeRequest {
     /// `CPU`, `T4 High-RAM`, `V6E1`, …
     pub fn label(&self) -> String {
         let (_, accelerator, shape) = self.resolved();
-        let high_ram = if shape == Some(Shape::HighRam) {
-            " High-RAM"
-        } else {
-            ""
-        };
+        let high_ram = if shape == Some(Shape::HighRam) { " High-RAM" } else { "" };
         format!("{}{high_ram}", hardware_label(accelerator.as_str()))
     }
 }
@@ -399,10 +381,7 @@ mod tests {
     fn high_mem_is_ignored_for_single_shape_accelerators() {
         assert_eq!(resolve_assign_shape(Accelerator::L4, true), None);
         assert_eq!(resolve_assign_shape(Accelerator::V6e1, true), None);
-        assert_eq!(
-            resolve_assign_shape(Accelerator::T4, true),
-            Some(Shape::HighRam)
-        );
+        assert_eq!(resolve_assign_shape(Accelerator::T4, true), Some(Shape::HighRam));
         assert_eq!(resolve_assign_shape(Accelerator::T4, false), None);
     }
 
@@ -413,21 +392,14 @@ mod tests {
         assert_eq!(shape_display_label("1"), "High-RAM");
         assert_eq!(shape_display_label("HIGH_RAM"), "High-RAM");
         assert_eq!(shape_display_label("0"), "Standard");
-        let request = RuntimeRequest {
-            name: "a".into(),
-            gpu: Some("t4".into()),
-            tpu: None,
-            high_mem: true,
-        };
+        let request =
+            RuntimeRequest { name: "a".into(), gpu: Some("t4".into()), tpu: None, high_mem: true };
         assert_eq!(request.label(), "T4 High-RAM");
     }
 
     #[test]
     fn accelerator_serializes_like_colab() {
-        assert_eq!(
-            serde_json::to_string(&Accelerator::V5e1).ok().as_deref(),
-            Some("\"V5E1\"")
-        );
+        assert_eq!(serde_json::to_string(&Accelerator::V5e1).ok().as_deref(), Some("\"V5E1\""));
         assert_eq!(Accelerator::None.as_str(), "NONE");
     }
 

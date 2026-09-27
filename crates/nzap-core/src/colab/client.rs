@@ -87,9 +87,7 @@ pub fn quota_message(accelerator: Accelerator) -> String {
 pub fn validate_endpoint(endpoint: &str) -> Result<&str> {
     let valid = !endpoint.is_empty()
         && endpoint.len() <= 200
-        && endpoint
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
+        && endpoint.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'));
     if valid {
         Ok(endpoint)
     } else {
@@ -126,30 +124,20 @@ impl ColabClient {
     }
 
     fn colab_url(&self, path: &str) -> String {
-        format!(
-            "{}{path}",
-            self.auth.endpoints().colab.trim_end_matches('/')
-        )
+        format!("{}{path}", self.auth.endpoints().colab.trim_end_matches('/'))
     }
 
     fn api_url(&self, path: &str) -> String {
-        format!(
-            "{}{path}",
-            self.auth.endpoints().colab_api.trim_end_matches('/')
-        )
+        format!("{}{path}", self.auth.endpoints().colab_api.trim_end_matches('/'))
     }
 
     fn is_colab_host(&self, url: &str) -> bool {
-        let host = url::Url::parse(url)
-            .ok()
-            .and_then(|url| url.host_str().map(str::to_owned));
+        let host = url::Url::parse(url).ok().and_then(|url| url.host_str().map(str::to_owned));
         host.is_some() && host == self.auth.endpoints().colab_host()
     }
 
     async fn call(&self, method: Method, url: &str, call: Call) -> Result<Value> {
-        let path = url::Url::parse(url)
-            .map(|parsed| parsed.path().to_owned())
-            .unwrap_or_default();
+        let path = url::Url::parse(url).map(|parsed| parsed.path().to_owned()).unwrap_or_default();
         let mut query = call.query.clone();
         if self.is_colab_host(url) && !query.iter().any(|(key, _)| *key == "authuser") {
             query.push(("authuser", "0".to_owned()));
@@ -179,9 +167,8 @@ impl ColabClient {
                 request = request.json(body);
             }
             if call.multipart_file_id {
-                request = request.multipart(
-                    reqwest::multipart::Form::new().text("file_id", "empty.ipynb"),
-                );
+                request = request
+                    .multipart(reqwest::multipart::Form::new().text("file_id", "empty.ipynb"));
             }
 
             let response = match request.send().await {
@@ -216,17 +203,17 @@ impl ColabClient {
     pub async fn list_assignments(&self) -> Result<Vec<Value>> {
         let url = self.colab_url(&format!("{TUN_ENDPOINT}/assignments"));
         let payload = self.call(Method::GET, &url, Call::default()).await?;
-        Ok(payload
-            .get("assignments")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default())
+        Ok(payload.get("assignments").and_then(Value::as_array).cloned().unwrap_or_default())
     }
 
     /// Allocate a VM (CPU/GPU/TPU, optionally High-RAM). The GET either
     /// returns an existing assignment for the notebook hash, or a token that
     /// authorises the POST which actually allocates the machine.
-    pub async fn assign(&self, request: &RuntimeRequest, notebook_hash: Option<Uuid>) -> Result<Value> {
+    pub async fn assign(
+        &self,
+        request: &RuntimeRequest,
+        notebook_hash: Option<Uuid>,
+    ) -> Result<Value> {
         let (variant, accelerator, shape) = request.resolved();
         let hash = notebook_hash.unwrap_or_else(Uuid::new_v4);
         let mut query = vec![
@@ -239,16 +226,8 @@ impl ColabClient {
         }
         let url = self.colab_url(&format!("{TUN_ENDPOINT}/assign"));
 
-        let first = self
-            .call(
-                Method::GET,
-                &url,
-                Call {
-                    query: query.clone(),
-                    ..Call::default()
-                },
-            )
-            .await?;
+        let first =
+            self.call(Method::GET, &url, Call { query: query.clone(), ..Call::default() }).await?;
         if first.get("endpoint").is_some() {
             return Ok(first);
         }
@@ -267,11 +246,7 @@ impl ColabClient {
             .call(
                 Method::POST,
                 &url,
-                Call {
-                    query,
-                    headers: vec![(XSRF_HEADER, token)],
-                    ..Call::default()
-                },
+                Call { query, headers: vec![(XSRF_HEADER, token)], ..Call::default() },
             )
             .await;
         match allocated {
@@ -289,18 +264,11 @@ impl ColabClient {
         let endpoint = validate_endpoint(endpoint)?;
         let url = self.colab_url(&format!("{TUN_ENDPOINT}/unassign/{endpoint}"));
         let payload = self.call(Method::GET, &url, Call::default()).await?;
-        let token = payload
-            .get("token")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
+        let token = payload.get("token").and_then(Value::as_str).unwrap_or_default().to_owned();
         self.call(
             Method::POST,
             &url,
-            Call {
-                headers: vec![(XSRF_HEADER, token)],
-                ..Call::default()
-            },
+            Call { headers: vec![(XSRF_HEADER, token)], ..Call::default() },
         )
         .await?;
         Ok(())
@@ -389,7 +357,11 @@ impl ColabClient {
     /// 2. `POST ?dryrun=true` checks consent — without it Colab answers
     ///    `{"success": false, "unauthorized_redirect_uri": …}`;
     /// 3. `POST ?dryrun=false` actually authorises the VM.
-    pub async fn propagate_credentials(&self, endpoint: &str, auth_type: AuthType) -> Result<Propagation> {
+    pub async fn propagate_credentials(
+        &self,
+        endpoint: &str,
+        auth_type: AuthType,
+    ) -> Result<Propagation> {
         let endpoint = validate_endpoint(endpoint)?;
         let url = self.colab_url(&format!("{TUN_ENDPOINT}/credentials-propagation/{endpoint}"));
         let base_query = |dry_run: bool| {
@@ -407,22 +379,12 @@ impl ColabClient {
             .call(
                 Method::GET,
                 &url,
-                Call {
-                    query: base_query(true),
-                    lenient: true,
-                    ..Call::default()
-                },
+                Call { query: base_query(true), lenient: true, ..Call::default() },
             )
             .await?;
-        let token = challenge
-            .get("token")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_owned();
+        let token = challenge.get("token").and_then(Value::as_str).unwrap_or_default().to_owned();
 
-        let check = self
-            .propagation_post(&url, base_query(true), &token)
-            .await?;
+        let check = self.propagation_post(&url, base_query(true), &token).await?;
         if check.get("success").and_then(Value::as_bool) != Some(true) {
             return Ok(Propagation {
                 success: false,
@@ -432,9 +394,7 @@ impl ColabClient {
                     .map(str::to_owned),
             });
         }
-        let result = self
-            .propagation_post(&url, base_query(false), &token)
-            .await?;
+        let result = self.propagation_post(&url, base_query(false), &token).await?;
         // A 200 without a body still means the VM was authorised (the CLI
         // checks only the status code on this call).
         Ok(Propagation {
@@ -467,11 +427,7 @@ impl ColabClient {
             Ok(_) => Ok(json!({})),
             Err(Error::Colab { body, status, message }) => match extract_consent_redirect(&body) {
                 Some(uri) => Ok(json!({ "success": false, "unauthorized_redirect_uri": uri })),
-                None => Err(Error::Colab {
-                    status,
-                    message,
-                    body,
-                }),
+                None => Err(Error::Colab { status, message, body }),
             },
             Err(error) => Err(error),
         }

@@ -47,11 +47,9 @@ impl LoopbackServer {
 
     /// Wait for Google's redirect and return the authorization code.
     pub async fn wait_for_code(self, expected_state: &str, timeout: Duration) -> Result<String> {
-        tokio::time::timeout(timeout, self.accept_loop(expected_state))
-            .await
-            .map_err(|_| {
-                Error::Auth("Timed out waiting for Google sign-in. Please try again.".to_owned())
-            })?
+        tokio::time::timeout(timeout, self.accept_loop(expected_state)).await.map_err(|_| {
+            Error::Auth("Timed out waiting for Google sign-in. Please try again.".to_owned())
+        })?
     }
 
     async fn accept_loop(&self, expected_state: &str) -> Result<String> {
@@ -85,7 +83,8 @@ async fn handle_connection(
         Err(_) => return Ok(None),
     };
     let Some(target) = request_target(&head) else {
-        respond(&mut stream, 400, "Bad request", "This address only accepts Google sign-in.").await?;
+        respond(&mut stream, 400, "Bad request", "This address only accepts Google sign-in.")
+            .await?;
         return Ok(None);
     };
     let Ok(url) = url::Url::parse(&format!("http://localhost{target}")) else {
@@ -111,10 +110,7 @@ async fn handle_connection(
 
     // A request without our state is not Google's redirect for this attempt
     // (a stale tab, or another page probing the port): answer and keep waiting.
-    if !state
-        .as_deref()
-        .is_some_and(|state| constant_time_eq(state, expected_state))
-    {
+    if !state.as_deref().is_some_and(|state| constant_time_eq(state, expected_state)) {
         respond(
             &mut stream,
             400,
@@ -133,9 +129,7 @@ async fn handle_connection(
             "Google sign-in was cancelled. You can close this tab.",
         )
         .await?;
-        return Ok(Some(Err(Error::Auth(format!(
-            "Google sign-in was cancelled ({error})."
-        )))));
+        return Ok(Some(Err(Error::Auth(format!("Google sign-in was cancelled ({error}).")))));
     }
 
     let Some(code) = code.filter(|code| !code.is_empty()) else {
@@ -164,7 +158,8 @@ async fn read_head(stream: &mut TcpStream) -> std::io::Result<String> {
             break;
         }
         buffer.extend_from_slice(&chunk[..read]);
-        if buffer.windows(4).any(|window| window == b"\r\n\r\n") || buffer.len() >= MAX_REQUEST_BYTES
+        if buffer.windows(4).any(|window| window == b"\r\n\r\n")
+            || buffer.len() >= MAX_REQUEST_BYTES
         {
             break;
         }
@@ -185,13 +180,15 @@ fn constant_time_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    a.bytes()
-        .zip(b.bytes())
-        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
-        == 0
+    a.bytes().zip(b.bytes()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-async fn respond(stream: &mut TcpStream, status: u16, title: &str, detail: &str) -> std::io::Result<()> {
+async fn respond(
+    stream: &mut TcpStream,
+    status: u16,
+    title: &str,
+    detail: &str,
+) -> std::io::Result<()> {
     let reason = match status {
         200 => "OK",
         404 => "Not Found",
@@ -252,9 +249,7 @@ mod tests {
         let waiter = tokio::spawn(async move { server.wait_for_code("good", LOGIN_TIMEOUT).await });
 
         assert!(get(port, "/favicon.ico").await.starts_with("HTTP/1.1 404"));
-        assert!(get(port, "/callback?code=x&state=bad")
-            .await
-            .starts_with("HTTP/1.1 400"));
+        assert!(get(port, "/callback?code=x&state=bad").await.starts_with("HTTP/1.1 400"));
         let ok = get(port, "/callback?code=the-code&state=good").await;
         assert!(ok.starts_with("HTTP/1.1 200"));
         assert!(ok.contains("Google connected"));
@@ -275,10 +270,7 @@ mod tests {
     #[tokio::test]
     async fn times_out() {
         let server = LoopbackServer::bind().await.unwrap();
-        let error = server
-            .wait_for_code("s", Duration::from_millis(50))
-            .await
-            .unwrap_err();
+        let error = server.wait_for_code("s", Duration::from_millis(50)).await.unwrap_err();
         assert!(matches!(error, Error::Auth(_)));
     }
 

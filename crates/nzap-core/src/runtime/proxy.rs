@@ -44,11 +44,7 @@ pub struct RuntimeProxy {
 
 impl RuntimeProxy {
     pub fn new(http: reqwest::Client, base_url: &str, token: &str) -> Self {
-        Self {
-            http,
-            base_url: base_url.trim_end_matches('/').to_owned(),
-            token: token.to_owned(),
-        }
+        Self { http, base_url: base_url.trim_end_matches('/').to_owned(), token: token.to_owned() }
     }
 
     pub fn base_url(&self) -> &str {
@@ -116,11 +112,14 @@ impl RuntimeProxy {
         Ok((value, bytes))
     }
 
-    async fn json(&self, method: Method, path: &str, query: &[(&str, &str)], body: Option<Value>) -> Result<Value> {
-        Ok(self
-            .request(method, path, query, body, DEFAULT_REQUEST_TIMEOUT)
-            .await?
-            .0)
+    async fn json(
+        &self,
+        method: Method,
+        path: &str,
+        query: &[(&str, &str)],
+        body: Option<Value>,
+    ) -> Result<Value> {
+        Ok(self.request(method, path, query, body, DEFAULT_REQUEST_TIMEOUT).await?.0)
     }
 
     fn contents_path(path: &str) -> String {
@@ -136,8 +135,7 @@ impl RuntimeProxy {
 
     /// A file model including its content.
     pub async fn read_file(&self, path: &str) -> Result<Value> {
-        self.json(Method::GET, &Self::contents_path(path), &[("content", "1")], None)
-            .await
+        self.json(Method::GET, &Self::contents_path(path), &[("content", "1")], None).await
     }
 
     /// The file's bytes (colab-cli `ContentsClient.download`): the model's
@@ -194,8 +192,7 @@ impl RuntimeProxy {
     }
 
     pub async fn delete(&self, path: &str) -> Result<()> {
-        self.json(Method::DELETE, &Self::contents_path(path), &[], None)
-            .await?;
+        self.json(Method::DELETE, &Self::contents_path(path), &[], None).await?;
         Ok(())
     }
 
@@ -218,15 +215,19 @@ impl RuntimeProxy {
     }
 
     pub async fn start_kernel(&self, name: &str) -> Result<Value> {
-        self.json(Method::POST, "api/kernels", &[], Some(json!({ "name": name })))
-            .await
+        self.json(Method::POST, "api/kernels", &[], Some(json!({ "name": name }))).await
     }
 
     /// Bind a named notebook session to a kernel. This is what makes the
     /// runtime show up with a human name on Colab's "Manage sessions" page
     /// (a bare kernel renders as "Unknown notebook"); colab-vscode does the
     /// same lookup in `assignments.ts`.
-    pub async fn create_session(&self, session_name: &str, kernel_id: &str, kernel_name: &str) -> Result<Value> {
+    pub async fn create_session(
+        &self,
+        session_name: &str,
+        kernel_id: &str,
+        kernel_name: &str,
+    ) -> Result<Value> {
         self.json(
             Method::POST,
             "api/sessions",
@@ -247,13 +248,23 @@ impl RuntimeProxy {
     }
 
     pub async fn restart_kernel(&self, kernel_id: &str) -> Result<Value> {
-        self.json(Method::POST, &format!("api/kernels/{}/restart", quote_path(kernel_id)), &[], None)
-            .await
+        self.json(
+            Method::POST,
+            &format!("api/kernels/{}/restart", quote_path(kernel_id)),
+            &[],
+            None,
+        )
+        .await
     }
 
     pub async fn interrupt_kernel(&self, kernel_id: &str) -> Result<()> {
-        self.json(Method::POST, &format!("api/kernels/{}/interrupt", quote_path(kernel_id)), &[], None)
-            .await?;
+        self.json(
+            Method::POST,
+            &format!("api/kernels/{}/interrupt", quote_path(kernel_id)),
+            &[],
+            None,
+        )
+        .await?;
         Ok(())
     }
 

@@ -94,10 +94,6 @@ impl MockState {
     }
 
     pub fn requests_to(&self, path: &str) -> Vec<RecordedRequest> {
-        self.requests
-            .iter()
-            .filter(|request| request.path == path)
-            .cloned()
-            .collect()
+        self.requests.iter().filter(|request| request.path == path).cloned().collect()
     }
 }

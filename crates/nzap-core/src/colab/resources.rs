@@ -39,15 +39,12 @@ fn meter(usage: Option<f64>, limit: Option<f64>, name: Option<String>) -> Option
         return None;
     }
     let percent = match (usage, limit) {
-        (Some(usage), Some(limit)) if limit > 0.0 => Some((usage / limit * 100.0).clamp(0.0, 100.0)),
+        (Some(usage), Some(limit)) if limit > 0.0 => {
+            Some((usage / limit * 100.0).clamp(0.0, 100.0))
+        }
         _ => None,
     };
-    Some(Meter {
-        usage,
-        limit,
-        percent,
-        name,
-    })
+    Some(Meter { usage, limit, percent, name })
 }
 
 /// Used/total from an entry carrying `usedBytes`, or `totalBytes - freeBytes`.
@@ -79,11 +76,8 @@ pub fn normalize(raw: &Value) -> Resources {
             meter(used, total, None)
         });
 
-    let gpu = raw
-        .get("gpus")
-        .and_then(Value::as_array)
-        .and_then(|gpus| gpus.first())
-        .and_then(|gpu| {
+    let gpu =
+        raw.get("gpus").and_then(Value::as_array).and_then(|gpus| gpus.first()).and_then(|gpu| {
             let (used, total) = used_and_total(gpu);
             let name = gpu.get("name").and_then(Value::as_str).map(str::to_owned);
             meter(used, total, name)
@@ -118,7 +112,8 @@ mod tests {
 
     #[test]
     fn cpu_runtime_has_no_gpu_meter() {
-        let resources = normalize(&json!({"memory": {"totalBytes": 10, "freeBytes": 5}, "gpus": []}));
+        let resources =
+            normalize(&json!({"memory": {"totalBytes": 10, "freeBytes": 5}, "gpus": []}));
         assert!(resources.gpu.is_none());
         assert!(resources.disk.is_none());
         assert_eq!(normalize(&json!({})), Resources::default());

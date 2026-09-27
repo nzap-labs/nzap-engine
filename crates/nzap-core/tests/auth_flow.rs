@@ -34,10 +34,7 @@ impl Harness {
         AuthManager::new(
             nzap_core::http::build_client().unwrap(),
             Endpoints::single_host(&self.mock.base_url),
-            OAuthClient {
-                client_id: "test-client".into(),
-                client_secret: None,
-            },
+            OAuthClient { client_id: "test-client".into(), client_secret: None },
             self.store.clone(),
             self.identity.clone(),
         )
@@ -58,10 +55,8 @@ async fn sign_in(manager: &AuthManager) -> nzap_core::auth::GoogleUser {
     assert!(login.auth_url.contains("code_challenge_method=S256"));
     assert!(login.auth_url.contains("login_hint=ada%40example.com"));
     let url = login.auth_url.clone();
-    let (user, ()) = tokio::join!(
-        manager.finish_loopback(login, LOGIN_TIMEOUT),
-        approve_in_browser(&url)
-    );
+    let (user, ()) =
+        tokio::join!(manager.finish_loopback(login, LOGIN_TIMEOUT), approve_in_browser(&url));
     user.unwrap()
 }
 
@@ -104,10 +99,7 @@ async fn loopback_sign_in_refresh_and_persistence() {
     // A fresh manager (app restart) picks the connection up again.
     let restarted = harness.manager();
     assert!(restarted.snapshot().await.has_credentials);
-    assert_eq!(
-        restarted.user().await.map(|user| user.email).as_deref(),
-        Some("ada@example.com")
-    );
+    assert_eq!(restarted.user().await.map(|user| user.email).as_deref(), Some("ada@example.com"));
     let token = restarted.access_token().await.unwrap();
     assert!(harness.mock.state().access_tokens.contains(&token));
 }
@@ -157,22 +149,13 @@ async fn revoked_grant_is_reported_and_remembered() {
     let snapshot = manager.snapshot().await;
     assert!(!snapshot.has_credentials);
     assert_eq!(snapshot.reason, Some(DisconnectReason::Revoked));
-    assert_eq!(
-        snapshot.user.map(|user| user.email).as_deref(),
-        Some("ada@example.com")
-    );
+    assert_eq!(snapshot.user.map(|user| user.email).as_deref(), Some("ada@example.com"));
     assert_eq!(harness.store.get("google-refresh-token").unwrap(), None);
 
     // After a restart the app still knows who was connected, and why not now.
     let restarted = harness.manager();
-    assert_eq!(
-        restarted.snapshot().await.reason,
-        Some(DisconnectReason::Revoked)
-    );
-    assert!(matches!(
-        restarted.access_token().await,
-        Err(Error::AuthExpired(_))
-    ));
+    assert_eq!(restarted.snapshot().await.reason, Some(DisconnectReason::Revoked));
+    assert!(matches!(restarted.access_token().await, Err(Error::AuthExpired(_))));
 
     // Connecting again clears the revoked state.
     sign_in(&restarted).await;
@@ -219,10 +202,7 @@ async fn abandoned_login_times_out() {
     let harness = Harness::new().await;
     let manager = harness.manager();
     let login = manager.begin_loopback(None).await.unwrap();
-    let error = manager
-        .finish_loopback(login, Duration::from_millis(100))
-        .await
-        .unwrap_err();
+    let error = manager.finish_loopback(login, Duration::from_millis(100)).await.unwrap_err();
     assert!(error.to_string().contains("Timed out"));
 }
 
@@ -243,10 +223,8 @@ async fn remote_copy_paste_flow() {
     assert_eq!(redirect.as_deref(), Some(REMOTE_REDIRECT_URI));
 
     // Google's landing page shows the code; read it off the redirect.
-    let no_redirects = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .unwrap();
+    let no_redirects =
+        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
     let response = no_redirects.get(&url).send().await.unwrap();
     let location = response.headers()["location"].to_str().unwrap().to_owned();
     let code = url::Url::parse(&location)
@@ -269,10 +247,7 @@ async fn code_exchange_enforces_pkce() {
     let harness = Harness::new().await;
     let http = nzap_core::http::build_client().unwrap();
     let endpoints = Endpoints::single_host(&harness.mock.base_url);
-    let client = OAuthClient {
-        client_id: "test-client".into(),
-        client_secret: None,
-    };
+    let client = OAuthClient { client_id: "test-client".into(), client_secret: None };
     let pkce = nzap_core::auth::oauth::Pkce::generate();
     let url = nzap_core::auth::oauth::build_auth_url(&nzap_core::auth::oauth::AuthRequest {
         auth_uri: &endpoints.auth_uri,
@@ -284,10 +259,8 @@ async fn code_exchange_enforces_pkce() {
         remote: true,
     })
     .unwrap();
-    let no_redirects = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .unwrap();
+    let no_redirects =
+        reqwest::Client::builder().redirect(reqwest::redirect::Policy::none()).build().unwrap();
     let location = no_redirects.get(&url).send().await.unwrap().headers()["location"]
         .to_str()
         .unwrap()

@@ -81,12 +81,7 @@ fn number(value: Option<&Value>) -> Option<f64> {
 }
 
 fn tier(raw: Option<&Value>) -> Tier {
-    match raw
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_ascii_uppercase()
-        .as_str()
-    {
+    match raw.and_then(Value::as_str).unwrap_or_default().to_ascii_uppercase().as_str() {
         "SUBSCRIPTION_TIER_PRO" | "PRO" => Tier::Pro,
         "SUBSCRIPTION_TIER_PRO_PLUS" | "PRO_PLUS" => Tier::ProPlus,
         _ => Tier::None,
@@ -102,12 +97,7 @@ fn accelerators(items: &Value) -> Vec<String> {
         match item {
             Value::String(name) => names.push(name.to_ascii_uppercase()),
             Value::Object(object) => {
-                for model in object
-                    .get("models")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                {
+                for model in object.get("models").and_then(Value::as_array).into_iter().flatten() {
                     if let Some(model) = model.as_str() {
                         names.push(model.to_ascii_uppercase());
                     }

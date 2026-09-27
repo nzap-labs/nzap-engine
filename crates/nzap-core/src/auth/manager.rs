@@ -122,11 +122,7 @@ impl AuthManager {
             client: RwLock::new(client),
             secrets,
             identity_path,
-            state: tokio::sync::Mutex::new(TokenState {
-                refresh_token,
-                access: None,
-                identity,
-            }),
+            state: tokio::sync::Mutex::new(TokenState { refresh_token, access: None, identity }),
             remote: Mutex::new(None),
         }
     }
@@ -140,10 +136,7 @@ impl AuthManager {
     }
 
     pub fn oauth_client(&self) -> OAuthClient {
-        self.client
-            .read()
-            .map(|client| client.clone())
-            .unwrap_or_default()
+        self.client.read().map(|client| client.clone()).unwrap_or_default()
     }
 
     /// Switch OAuth clients (Settings → "Bring your own client"). Tokens
@@ -196,13 +189,7 @@ impl AuthManager {
             login_hint,
             remote: false,
         })?;
-        Ok(LoopbackLogin {
-            auth_url,
-            server,
-            state,
-            pkce,
-            redirect_uri,
-        })
+        Ok(LoopbackLogin { auth_url, server, state, pkce, redirect_uri })
     }
 
     /// Wait for the browser redirect, then exchange the code and persist.
@@ -211,13 +198,7 @@ impl AuthManager {
         login: LoopbackLogin,
         timeout: Duration,
     ) -> Result<GoogleUser> {
-        let LoopbackLogin {
-            server,
-            state,
-            pkce,
-            redirect_uri,
-            ..
-        } = login;
+        let LoopbackLogin { server, state, pkce, redirect_uri, .. } = login;
         let code = server.wait_for_code(&state, timeout).await?;
         self.complete(&code, &pkce.verifier, &redirect_uri).await
     }
@@ -237,14 +218,9 @@ impl AuthManager {
             login_hint,
             remote: true,
         })?;
-        let mut pending = self
-            .remote
-            .lock()
-            .map_err(|_| Error::internal("Login state lock poisoned."))?;
-        *pending = Some(PendingRemote {
-            pkce,
-            created: Instant::now(),
-        });
+        let mut pending =
+            self.remote.lock().map_err(|_| Error::internal("Login state lock poisoned."))?;
+        *pending = Some(PendingRemote { pkce, created: Instant::now() });
         Ok(url)
     }
 
@@ -261,15 +237,20 @@ impl AuthManager {
             .take()
             .filter(|pending| pending.created.elapsed() < REMOTE_LOGIN_TTL)
             .ok_or_else(|| Error::Auth("No sign-in in progress. Start connecting again.".into()))?;
-        self.complete(code, &pending.pkce.verifier, REMOTE_REDIRECT_URI)
-            .await
+        self.complete(code, &pending.pkce.verifier, REMOTE_REDIRECT_URI).await
     }
 
     async fn complete(&self, code: &str, verifier: &str, redirect_uri: &str) -> Result<GoogleUser> {
         let client = self.oauth_client();
-        let tokens =
-            oauth::exchange_code(&self.http, &self.endpoints.token_uri, &client, code, verifier, redirect_uri)
-                .await?;
+        let tokens = oauth::exchange_code(
+            &self.http,
+            &self.endpoints.token_uri,
+            &client,
+            code,
+            verifier,
+            redirect_uri,
+        )
+        .await?;
         let refresh_token = tokens.refresh_token.clone().ok_or_else(|| {
             Error::Auth(
                 "Google did not issue a refresh token. Remove NZAP Engine from your Google \
@@ -277,8 +258,9 @@ impl AuthManager {
                     .to_owned(),
             )
         })?;
-        let user = oauth::fetch_userinfo(&self.http, &self.endpoints.userinfo_uri, &tokens.access_token)
-            .await?;
+        let user =
+            oauth::fetch_userinfo(&self.http, &self.endpoints.userinfo_uri, &tokens.access_token)
+                .await?;
 
         self.secrets.set(REFRESH_TOKEN_KEY, &refresh_token)?;
         let mut state = self.state.lock().await;
@@ -377,7 +359,8 @@ impl AuthManager {
     pub async fn disconnect(&self) -> Result<()> {
         let mut state = self.state.lock().await;
         if let Some(token) = state.refresh_token.take() {
-            if let Err(error) = oauth::revoke(&self.http, &self.endpoints.revoke_uri, &token).await {
+            if let Err(error) = oauth::revoke(&self.http, &self.endpoints.revoke_uri, &token).await
+            {
                 tracing::info!("Token revocation skipped: {error}");
             }
         }

@@ -39,9 +39,7 @@ impl MockGoogle {
 
     /// Start on a specific address (the `mock-colab` binary for desktop E2E).
     pub async fn start_on(bind: &str) -> Self {
-        let listener = tokio::net::TcpListener::bind(bind)
-            .await
-            .expect("bind mock Google server");
+        let listener = tokio::net::TcpListener::bind(bind).await.expect("bind mock Google server");
         let addr = listener.local_addr().expect("mock server address");
         let base_url = format!("http://{addr}");
         let state: Shared = Arc::new(Mutex::new(MockState::new(&base_url)));
@@ -55,12 +53,7 @@ impl MockGoogle {
                 eprintln!("mock Google server stopped: {error}");
             }
         });
-        Self {
-            base_url,
-            addr,
-            state,
-            shutdown: Some(tx),
-        }
+        Self { base_url, addr, state, shutdown: Some(tx) }
     }
 
     /// Lock the mock state to inspect or tweak it between requests.

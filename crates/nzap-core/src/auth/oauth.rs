@@ -39,10 +39,7 @@ impl OAuthClient {
     pub fn from_json(text: &str) -> Result<Self> {
         let value: serde_json::Value = serde_json::from_str(text)
             .map_err(|error| Error::invalid(format!("OAuth client JSON is invalid: {error}")))?;
-        let inner = value
-            .get("installed")
-            .or_else(|| value.get("web"))
-            .unwrap_or(&value);
+        let inner = value.get("installed").or_else(|| value.get("web")).unwrap_or(&value);
         let client: Self = serde_json::from_value(inner.clone())
             .map_err(|_| Error::invalid("OAuth client JSON has no client_id."))?;
         if client.client_id.trim().is_empty() {
@@ -70,10 +67,7 @@ impl Pkce {
 
     pub fn from_verifier(verifier: String) -> Self {
         let challenge = URL_SAFE_NO_PAD.encode(Sha256::digest(verifier.as_bytes()));
-        Self {
-            verifier,
-            challenge,
-        }
+        Self { verifier, challenge }
     }
 }
 
@@ -169,12 +163,8 @@ async fn post_token(
     what: &str,
     grant_is_refresh: bool,
 ) -> Result<TokenResponse> {
-    let response = http
-        .post(token_uri)
-        .form(form)
-        .timeout(std::time::Duration::from_secs(30))
-        .send()
-        .await?;
+    let response =
+        http.post(token_uri).form(form).timeout(std::time::Duration::from_secs(30)).send().await?;
     let status = response.status();
     let text = response.text().await?;
     if status.is_success() {
@@ -182,9 +172,8 @@ async fn post_token(
             .map_err(|_| Error::Auth(format!("{what}: Google sent an unexpected response.")));
     }
     let detail: Option<TokenErrorBody> = serde_json::from_str(&text).ok();
-    let (code, description) = detail
-        .map(|body| (body.error, body.error_description))
-        .unwrap_or_default();
+    let (code, description) =
+        detail.map(|body| (body.error, body.error_description)).unwrap_or_default();
     // On refresh, invalid_grant means the grant was revoked or expired: the
     // user has to connect again. On code exchange it means a stale code.
     if grant_is_refresh && code == "invalid_grant" {
@@ -196,11 +185,7 @@ async fn post_token(
     Err(Error::Auth(format!(
         "{what} failed ({}){}",
         status.as_u16(),
-        if description.is_empty() {
-            String::new()
-        } else {
-            format!(": {description}")
-        }
+        if description.is_empty() { String::new() } else { format!(": {description}") }
     )))
 }
 
@@ -293,10 +278,7 @@ mod tests {
         // 48 bytes -> 64 base64url chars; RFC 7636 wants 43..=128.
         assert_eq!(pkce.verifier.len(), 64);
         assert_ne!(Pkce::generate().verifier, pkce.verifier);
-        assert!(pkce
-            .verifier
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
+        assert!(pkce.verifier.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'));
     }
 
     #[test]

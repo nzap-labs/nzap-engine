@@ -60,13 +60,11 @@ async fn consent(
             client_id: get("client_id"),
         },
     );
-    Redirect::to(&format!("{redirect_uri}{separator}code={code}&state={state_param}")).into_response()
+    Redirect::to(&format!("{redirect_uri}{separator}code={code}&state={state_param}"))
+        .into_response()
 }
 
-async fn token(
-    State(state): State<Shared>,
-    Form(form): Form<HashMap<String, String>>,
-) -> Response {
+async fn token(State(state): State<Shared>, Form(form): Form<HashMap<String, String>>) -> Response {
     let get = |key: &str| form.get(key).cloned().unwrap_or_default();
     let mut mock = state.lock().expect("mock state");
     match get("grant_type").as_str() {
@@ -135,9 +133,7 @@ async fn revoke(
 
 async fn userinfo(State(state): State<Shared>, headers: HeaderMap) -> Response {
     let mock = state.lock().expect("mock state");
-    let authorization = headers
-        .get(header::AUTHORIZATION)
-        .and_then(|value| value.to_str().ok());
+    let authorization = headers.get(header::AUTHORIZATION).and_then(|value| value.to_str().ok());
     if !mock.is_authorized(authorization) {
         return StatusCode::UNAUTHORIZED.into_response();
     }

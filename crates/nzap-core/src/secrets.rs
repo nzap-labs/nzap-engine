@@ -61,9 +61,7 @@ impl KeychainStore {
     pub fn probe(service: &str) -> Option<Self> {
         let entry = keyring::Entry::new(service, "nzap-probe").ok()?;
         match entry.get_password() {
-            Ok(_) | Err(keyring::Error::NoEntry) => Some(Self {
-                service: service.to_owned(),
-            }),
+            Ok(_) | Err(keyring::Error::NoEntry) => Some(Self { service: service.to_owned() }),
             Err(error) => {
                 tracing::info!("Keychain unavailable: {error}");
                 None
@@ -117,10 +115,7 @@ pub struct FileStore {
 
 impl FileStore {
     pub fn new(path: PathBuf) -> Self {
-        Self {
-            path,
-            lock: Mutex::new(()),
-        }
+        Self { path, lock: Mutex::new(()) }
     }
 
     fn read_map(&self) -> Result<BTreeMap<String, String>> {
@@ -184,10 +179,7 @@ impl SecretStore for MemoryStore {
     }
 
     fn set(&self, key: &str, value: &str) -> Result<()> {
-        self.map
-            .lock()
-            .map_err(|_| poisoned())?
-            .insert(key.to_owned(), value.to_owned());
+        self.map.lock().map_err(|_| poisoned())?.insert(key.to_owned(), value.to_owned());
         Ok(())
     }
 
