@@ -17,7 +17,8 @@ nzap-mock-colab = { path = "crates/nzap-mock-colab" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 thiserror = "2"
-tracing = "0.1"
+# `log` makes tracing events visible to the app's log plugin.
+tracing = { version = "0.1", features = ["log"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "fs"] }
 
 [workspace.lints.rust]

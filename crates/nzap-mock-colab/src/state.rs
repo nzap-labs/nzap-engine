@@ -140,10 +140,20 @@ pub struct MockState {
 
     // -- runtimes ------------------------------------------------------------
     pub runtimes: HashMap<String, MockRuntime>,
+    /// Files every newly assigned runtime starts with (besides the defaults).
+    pub new_runtime_files: BTreeMap<String, MockFile>,
     /// `(endpoint, cols, rows)` for every terminal resize.
     pub tty_resizes: Vec<(String, u64, u64)>,
     /// Every command line entered in a terminal.
     pub tty_commands: Vec<String>,
+
+    // -- Drive and static hosting ---------------------------------------------
+    /// Drive file id -> (name, content).
+    pub drive_files: HashMap<String, (String, String)>,
+    /// `/static/<path>` -> body (`REDIRECT:<url>` answers 302).
+    pub static_files: HashMap<String, String>,
+    pub static_hits: HashMap<String, usize>,
+    pub static_not_modified: usize,
 
     pub requests: Vec<RecordedRequest>,
     counter: u64,
@@ -198,8 +208,14 @@ impl MockState {
             xsrf_tokens: HashSet::new(),
 
             runtimes: HashMap::new(),
+            new_runtime_files: BTreeMap::new(),
             tty_resizes: Vec::new(),
             tty_commands: Vec::new(),
+
+            drive_files: HashMap::new(),
+            static_files: HashMap::new(),
+            static_hits: HashMap::new(),
+            static_not_modified: 0,
 
             requests: Vec::new(),
             counter: 0,
@@ -260,7 +276,9 @@ impl MockState {
             proxy_token: self.next_id("proxy-token"),
         };
         self.assignments.push(assignment.clone());
-        self.runtimes.insert(assignment.endpoint.clone(), MockRuntime::with_defaults());
+        let mut runtime = MockRuntime::with_defaults();
+        runtime.files.extend(self.new_runtime_files.clone());
+        self.runtimes.insert(assignment.endpoint.clone(), runtime);
         assignment
     }
 
