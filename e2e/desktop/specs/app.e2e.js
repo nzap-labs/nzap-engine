@@ -1,0 +1,122 @@
+// The real NZAP Engine end to end: Google sign-in through the loopback
+// redirect, a runtime, a cell, a notebook, the terminal and disconnecting —
+// every call going through the Rust engine to nzap-mock-colab.
+import fs from 'node:fs'
+import { openLog } from '../wdio.conf.js'
+
+/** The last URL the app asked the system browser to open. */
+async function nextOpenedUrl(previous = 0) {
+  let urls = []
+  await browser.waitUntil(
+    () => {
+      try {
+        urls = fs.readFileSync(openLog, 'utf8').trim().split('\n').filter(Boolean)
+      } catch {
+        urls = []
+      }
+      return urls.length > previous
+    },
+    { timeout: 20_000, timeoutMsg: 'the app never opened a browser URL' },
+  )
+  return { url: urls.at(-1), count: urls.length }
+}
+
+async function waitForText(selector, text) {
+  const element = await $(selector)
+  await browser.waitUntil(async () => (await element.getText()).includes(text), {
+    timeout: 30_000,
+    timeoutMsg: `"${text}" never appeared in ${selector}`,
+  })
+  return element
+}
+
+async function openTab(name) {
+  const tab = await $(`button[role="tab"]*=${name}`)
+  await tab.click()
+}
+
+describe('NZAP Engine (real engine, mock Google)', () => {
+  it('starts on the onboarding screen', async () => {
+    await (await $('section[aria-label="Welcome"]')).waitForDisplayed()
+    await waitForText('section[aria-label="Google Auth"]', 'not connected')
+  })
+
+  it('connects Google through the loopback redirect', async () => {
+    await (await $('button*=Connect Google')).click()
+    const { url } = await nextOpenedUrl()
+    if (!url.includes('/o/oauth2/v2/auth') || !url.includes('code_challenge_method=S256')) {
+      throw new Error(`unexpected consent URL: ${url}`)
+    }
+    // Play the browser: the mock consents and redirects to the app's
+    // one-shot loopback listener, which completes the PKCE exchange.
+    const response = await fetch(url, { redirect: 'follow' })
+    if (response.status !== 200 || !(await response.text()).includes('Google connected')) {
+      throw new Error(`loopback page answered ${response.status}`)
+    }
+    await waitForText('section[aria-label="Google Auth"]', 'Connected as ada@example.com')
+  })
+
+  it('launches a runtime and streams a cell', async () => {
+    await (await $('input[placeholder="my-runtime"]')).setValue('desktop-box')
+    await (await $('button*=Launch runtime')).click()
+    await (await $('section[aria-label="Console"]')).waitForDisplayed({ timeout: 60_000 })
+
+    const editor = await $('section[aria-label="Console"] textarea')
+    await editor.clearValue()
+    await editor.setValue('print("hello from the desktop app")')
+    await (await $('button*=Run cell')).click()
+    await waitForText('section[aria-label="Console"]', 'hello from the desktop app')
+    await waitForText('section[aria-label="Console"]', '✓ finished')
+  })
+
+  it('answers an input() prompt', async () => {
+    const editor = await $('section[aria-label="Console"] textarea')
+    await editor.clearValue()
+    await editor.setValue('name = input("Name? ")')
+    await (await $('button*=Run cell')).click()
+    const answer = await $('input[placeholder="type your answer and press Enter"]')
+    await answer.waitForDisplayed()
+    await answer.setValue('Ada')
+    await browser.keys('Enter')
+    await waitForText('section[aria-label="Console"]', 'Hello, Ada!')
+  })
+
+  it('runs a public notebook with a parameter', async () => {
+    await openTab('Notebooks')
+    const card = await $('li*=Print Notebook')
+    await (await card.$('button*=Run')).click()
+    const dialog = await $('div[role="dialog"]')
+    const field = await dialog.$('input')
+    await field.clearValue()
+    await field.setValue('Hi from a notebook')
+    await (await dialog.$('button=Run')).click()
+    await waitForText('div[role="dialog"]', 'Hi from a notebook')
+    await browser.keys('Escape')
+  })
+
+  it('opens a shell on the runtime', async () => {
+    await openTab('Terminal')
+    const terminal = await $('section[aria-label="Terminal"] .xterm')
+    await terminal.waitForDisplayed()
+    await waitForText('section[aria-label="Terminal"] .xterm-rows', 'root@mock:/content#')
+    await terminal.click()
+    await browser.keys(['w', 'h', 'o', 'a', 'm', 'i', 'Enter'])
+    await waitForText('section[aria-label="Terminal"] .xterm-rows', 'root\n')
+  })
+
+  it('browses the runtime files', async () => {
+    await openTab('Files')
+    await waitForText('section[aria-label="Files"]', 'sample_data')
+  })
+
+  it('releases the runtime and disconnects', async () => {
+    await openTab('Runtimes')
+    await (await $('section[aria-label="Runtimes"] button*=Stop')).click()
+    await (await $('div[role="dialog"] button*=Stop and release')).click()
+    await waitForText('section[aria-label="Runtimes"]', 'No runtimes yet')
+
+    await (await $('section[aria-label="Google Auth"] button*=Disconnect')).click()
+    await (await $('div[role="dialog"] button=Disconnect')).click()
+    await waitForText('section[aria-label="Google Auth"]', 'not connected')
+  })
+})

@@ -76,3 +76,78 @@ jobs:
       - name: rustfmt
         if: always()
         run: cargo fmt --all --check
+
+  web-e2e:
+    name: web e2e (chromium + webkit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npx playwright test
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
+
+  desktop-e2e:
+    name: desktop e2e (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev             librsvg2-dev patchelf libdbus-1-dev pkg-config webkit2gtk-driver xvfb
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-e2e
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+
+      - name: Build the app (debug, dev overrides on) and the mock
+        run: |
+          npx tauri build --debug --no-bundle
+          cargo build -p nzap-mock-colab --bin mock-colab
+
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --locked
+
+      - name: Install msedgedriver matching WebView2
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cargo install --git https://github.com/chippers/msedgedriver-tool
+          & "$env:USERPROFILE\.cargoin\msedgedriver-tool.exe"
+          "NATIVE_DRIVER=$PWD\msedgedriver.exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install the E2E runner
+        working-directory: e2e/desktop
+        run: npm ci
+
+      - name: Run (Linux)
+        if: runner.os == 'Linux'
+        working-directory: e2e/desktop
+        run: xvfb-run --auto-servernum npm test
+
+      - name: Run (Windows)
+        if: runner.os == 'Windows'
+        working-directory: e2e/desktop
+        run: npm test

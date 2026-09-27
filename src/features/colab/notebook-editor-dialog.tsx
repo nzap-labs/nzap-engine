@@ -136,7 +136,8 @@ export function NotebookEditorDialog({
               value={title}
               onChange={(event) => {
                 setTitle(event.target.value)
-                if (!slugTouched) setSlug(slugify(event.target.value))
+                // A saved notebook keeps its handle; only new ones follow the title.
+                if (!slugTouched && mode !== 'edit') setSlug(slugify(event.target.value))
               }}
               className="mt-1.5 h-11 w-full rounded-2xl border border-ink bg-transparent px-4 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
             />

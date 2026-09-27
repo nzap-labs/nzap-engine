@@ -1,0 +1,15 @@
+{
+  "name": "nzap-engine-desktop-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Drives the real NZAP Engine binary through tauri-driver against nzap-mock-colab.",
+  "scripts": {
+    "test": "wdio run ./wdio.conf.js"
+  },
+  "devDependencies": {
+    "@wdio/cli": "^9.32.0",
+    "@wdio/local-runner": "^9.32.0",
+    "@wdio/mocha-framework": "^9.32.0",
+    "@wdio/spec-reporter": "^9.32.0"
+  }
+}
