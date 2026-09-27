@@ -211,31 +211,31 @@ Each phase ends green in CI and with a commit and push to `main`.
 - [x] This plan, README, LICENSE (Apache-2.0), CONTRIBUTING, CODE_OF_CONDUCT, SECURITY, templates
 - [x] Vite + React 19 + TS strict + Tailwind v4 (NZAP tokens) + ESLint + Prettier
 - [x] Cargo workspace: `nzap-core`, `nzap-mock-colab`, `src-tauri` (Tauri 2) skeletons
-- [x] CI: frontend checks + Rust fmt/clippy/test on three OSes (workflow written; first green run pending)
+- [x] CI: frontend checks + Rust fmt/clippy/test on three OSes (green on all three OSes)
 
 ### Phase 1 — Core foundations: config, HTTP, OAuth, secrets
 
-- [ ] Constants ported 1:1 (`config.py`): domains, headers, scopes, accelerators, shapes
-- [ ] Error model and IPC error codes
-- [ ] Colab HTTP layer: XSSI strip, `authuser=0`, client-agent header, timeouts
-- [ ] OAuth: PKCE, loopback listener, remote copy/paste flow, refresh, userinfo, BYO client
-- [ ] Secret store: keychain with file fallback; app paths injected by the shell
-- [ ] Mock OAuth server; unit + integration tests
+- [x] Constants ported 1:1 (`config.py`): domains, headers, scopes, accelerators, shapes
+- [x] Error model and IPC error codes
+- [x] Colab HTTP layer: XSSI strip, `authuser=0`, client-agent header, timeouts
+- [x] OAuth: PKCE, loopback listener, remote copy/paste flow, refresh, userinfo, BYO client
+- [x] Secret store: keychain with file fallback; app paths injected by the shell
+- [x] Mock OAuth server; unit + integration tests
 
 ### Phase 2 — Colab control plane & runtime proxy
 
-- [ ] `ColabClient`: assign (GET token → POST), unassign, assignments, keep-alive, user-info, ccu-info, runtime specs, resources, credential propagation (both routes)
-- [ ] Quota summary (burn rate, free minutes, severity, tooltip, signup action)
-- [ ] `RuntimeProxy`: contents (list/read/download/write/upload/mkdir/delete/rename), kernels, sessions
-- [ ] `nzap-mock-colab` HTTP surface; integration tests
+- [x] `ColabClient`: assign (GET token → POST), unassign, assignments, keep-alive, user-info, ccu-info, runtime specs, resources, credential propagation (the CLI's `/tun/m` route; the unused `v1` route is not ported)
+- [x] Quota summary (burn rate, free minutes, severity, tooltip, signup action)
+- [x] `RuntimeProxy`: contents (list/read/download/write/upload/mkdir/delete/rename), kernels, sessions
+- [x] `nzap-mock-colab` HTTP surface; integration tests
 
 ### Phase 3 — Kernel, sessions, history, terminal
 
-- [ ] Kernel WebSocket channel: multiplexed execute, stdin replies, `colab_request` handling, execution state
-- [ ] Session manager: create/adopt/connect/restart/interrupt/shutdown/stop/release, persistence, keep-alive tasks (60 s, 24 h cap), Drive/GCP consent pause & resume
-- [ ] History log + ipynb/md/txt/jsonl export
-- [ ] Terminal bridge (`/colab/tty`, header auth only, frame validation)
-- [ ] Mock kernel + TTY servers; integration tests
+- [x] Kernel WebSocket channel: multiplexed execute, stdin replies, `colab_request` handling, execution state
+- [x] Session manager: create/adopt/connect/restart/interrupt/shutdown/stop/release, persistence, keep-alive tasks (60 s, 24 h cap), Drive/GCP consent pause & resume
+- [x] History log + ipynb/md/txt/jsonl export
+- [x] Terminal bridge (`/colab/tty`, header auth only, frame validation)
+- [x] Mock kernel + TTY servers; integration tests
 
 ### Phase 4 — Automations, run-file, import, jobs, notebooks
 

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'phase-*']
   pull_request:
 
 concurrency:
@@ -66,11 +66,13 @@ jobs:
       - run: npm ci
       - run: npm run build
 
-      - name: rustfmt
-        run: cargo fmt --all --check
-
       - name: clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
       - name: test
         run: cargo test --workspace
+
+      # Last, so one run reports compile, lint and test results before style.
+      - name: rustfmt
+        if: always()
+        run: cargo fmt --all --check

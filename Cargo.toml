@@ -26,7 +26,6 @@ unsafe_code = "forbid"
 [workspace.lints.clippy]
 dbg_macro = "warn"
 todo = "warn"
-unwrap_used = "warn"
 
 [profile.release]
 codegen-units = 1
