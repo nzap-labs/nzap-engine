@@ -7,10 +7,12 @@
 //! plain `cargo test` against `nzap-mock-colab`.
 
 pub mod auth;
+pub mod colab;
 pub mod config;
 pub mod error;
 pub mod http;
 pub mod paths;
+pub mod runtime;
 pub mod secrets;
 
 pub use error::{Error, ErrorCode, ErrorPayload, Result};

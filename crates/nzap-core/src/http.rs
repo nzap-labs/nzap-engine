@@ -70,9 +70,6 @@ pub fn extract_consent_redirect(body: &str) -> Option<String> {
 /// Map a non-success Colab response to an [`Error`], keeping the body for
 /// callers that inspect it.
 pub fn colab_error(method: &str, path: &str, status: reqwest::StatusCode, body: String) -> Error {
-    if status == reqwest::StatusCode::PRECONDITION_FAILED {
-        return Error::TooManyAssignments;
-    }
     let reason = status.canonical_reason().unwrap_or("");
     Error::Colab {
         status: Some(status.as_u16()),
@@ -115,14 +112,7 @@ mod tests {
     }
 
     #[test]
-    fn precondition_failed_means_too_many_assignments() {
-        let error = colab_error(
-            "POST",
-            "/tun/m/assign",
-            reqwest::StatusCode::PRECONDITION_FAILED,
-            String::new(),
-        );
-        assert!(matches!(error, Error::TooManyAssignments));
+    fn colab_errors_carry_status_and_method() {
         let error = colab_error("GET", "/x", reqwest::StatusCode::FORBIDDEN, "b".into());
         assert_eq!(error.to_string(), "GET /x failed: 403 Forbidden");
         assert_eq!(error.status(), Some(403));

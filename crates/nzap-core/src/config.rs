@@ -271,7 +271,9 @@ pub fn resolve_runtime_options(
     tpu: Option<&str>,
     high_mem: bool,
 ) -> (Variant, Accelerator, Option<Shape>) {
-    let non_empty = |value: Option<&str>| value.filter(|text| !text.trim().is_empty());
+    fn non_empty(value: Option<&str>) -> Option<&str> {
+        value.filter(|text| !text.trim().is_empty())
+    }
     let (variant, accelerator) = if let Some(tpu) = non_empty(tpu) {
         (
             Variant::Tpu,

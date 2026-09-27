@@ -1,0 +1,3 @@
+# Wrap only when a line exceeds max_width (100), instead of rustfmt's default
+# small-width heuristics for calls, chains and struct literals.
+use_small_heuristics = "Max"
