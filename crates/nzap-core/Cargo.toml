@@ -1,0 +1,12 @@
+[package]
+name = "nzap-core"
+description = "The NZAP Engine: a Rust client for Google Colab runtimes (a port of colab-studio)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/nzap-labs/nzap-engine/security/advisories/new
+    about: Please report security issues privately (see SECURITY.md).
+  - name: Add a public notebook
+    url: https://github.com/nzap-labs/nzap-notebooks
+    about: Public notebooks are contributed to the nzap-notebooks repository.

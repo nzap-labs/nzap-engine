@@ -1,0 +1,96 @@
+@import 'tailwindcss';
+
+/* ── NZAP design tokens (docs/landing-source/prompt.md) ─────────────── */
+:root {
+  --color-cream-paper: #f8f5ed;
+  --color-soft-paper: #f1ede2;
+  --color-ink: #11110f;
+  --color-graphite: #6f706b;
+  --color-sunshine: #ffda6e;
+  --color-mint: #6ece9d;
+  --color-coral: #e78b72;
+  --color-quiet-line: #d6d1c5;
+  /* text placed on sunshine fills — constant across themes for contrast */
+  --color-on-sunshine: #11110f;
+}
+
+/* x.ai-style dark: near-black warm canvas, dark-gray panels, light "ink" */
+.dark {
+  --color-cream-paper: #0f0f0e;
+  --color-soft-paper: #191917;
+  --color-ink: #f0eee6;
+  --color-graphite: #9a9b93;
+  --color-quiet-line: #2b2b28;
+}
+
+@theme inline {
+  --color-paper: var(--color-cream-paper);
+  --color-paper-soft: var(--color-soft-paper);
+  --color-ink: var(--color-ink);
+  --color-graphite: var(--color-graphite);
+  --color-sunshine: var(--color-sunshine);
+  --color-mint: var(--color-mint);
+  --color-coral: var(--color-coral);
+  --color-line: var(--color-quiet-line);
+  --color-on-sunshine: var(--color-on-sunshine);
+
+  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-panel: 16px;
+  --radius-feature: 24px;
+}
+
+@layer base {
+  html {
+    font-size: 120%;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-paper font-sans text-ink antialiased;
+    font-feature-settings: 'ss03', 'ss04';
+    font-variant-ligatures: common-ligatures;
+    transition:
+      background-color 0.3s ease,
+      color 0.3s ease;
+  }
+
+  ::selection {
+    background: var(--color-sunshine);
+    color: var(--color-on-sunshine);
+  }
+
+  /* momentary cross-fade of every surface while the theme flips */
+  @media (prefers-reduced-motion: no-preference) {
+    html.theming *,
+    html.theming *::before,
+    html.theming *::after {
+      transition:
+        background-color 0.3s ease,
+        border-color 0.3s ease,
+        color 0.25s ease,
+        fill 0.25s ease !important;
+    }
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-quiet-line) transparent;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--color-quiet-line);
+    border-radius: 999px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}

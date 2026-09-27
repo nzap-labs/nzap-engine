@@ -1,0 +1,57 @@
+name: Bug report
+description: Something in NZAP Engine does not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Please **never paste tokens, runtime-proxy URLs or
+        log lines containing `Bearer`** — the app redacts them, but double-check.
+  - type: input
+    id: version
+    attributes:
+      label: NZAP Engine version
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [Windows, macOS, Linux]
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Google connection
+        - Runtimes (create / release / keep-alive)
+        - Console / execution
+        - Terminal
+        - Files
+        - Notebooks
+        - Run file / jobs
+        - Installer / updates
+        - Other
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Connect Google
+        2. Create a T4 runtime
+        3. …
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: Settings → Diagnostics → Open log folder.
+      render: text

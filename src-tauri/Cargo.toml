@@ -1,0 +1,28 @@
+[package]
+name = "nzap-engine"
+description = "NZAP Engine desktop app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+default-run = "nzap-engine"
+
+[lib]
+name = "nzap_engine_lib"
+path = "src/lib.rs"
+
+[[bin]]
+name = "nzap-engine"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2.7", features = [] }
+
+[dependencies]
+nzap-core.workspace = true
+tauri = { version = "2.12", features = [] }
+
+[lints]
+workspace = true

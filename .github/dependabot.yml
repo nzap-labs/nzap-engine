@@ -1,0 +1,25 @@
+version: 2
+updates:
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      tauri:
+        patterns: ['tauri*']
+
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      tauri:
+        patterns: ['@tauri-apps/*']
+      tooling:
+        patterns:
+          ['eslint*', '@eslint/*', 'typescript*', 'prettier', 'vite*', 'vitest', '@vitejs/*']
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,36 @@
+[workspace]
+resolver = "2"
+members = ["crates/nzap-core", "crates/nzap-mock-colab", "src-tauri"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/nzap-labs/nzap-engine"
+authors = ["NZAP Labs"]
+
+[workspace.dependencies]
+nzap-core = { path = "crates/nzap-core" }
+nzap-mock-colab = { path = "crates/nzap-mock-colab" }
+
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tracing = "0.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "fs"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
