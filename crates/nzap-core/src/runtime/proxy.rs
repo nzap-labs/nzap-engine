@@ -122,8 +122,13 @@ impl RuntimeProxy {
         Ok(self.request(method, path, query, body, DEFAULT_REQUEST_TIMEOUT).await?.0)
     }
 
+    /// `api/contents/<quoted>`; the root is `api/contents` (Jupyter's route
+    /// accepts both forms, catch-all routers only the bare one).
     fn contents_path(path: &str) -> String {
-        format!("api/contents/{}", quote_path(path))
+        match quote_path(path) {
+            quoted if quoted.is_empty() => "api/contents".to_owned(),
+            quoted => format!("api/contents/{quoted}"),
+        }
     }
 
     // ------------------------------------------------------------- contents
@@ -312,7 +317,7 @@ impl RuntimeProxy {
 }
 
 /// `json.dumps(value, indent=1)`, as colab-studio writes notebooks.
-fn pretty_json(value: &Value) -> Vec<u8> {
+pub(crate) fn pretty_json(value: &Value) -> Vec<u8> {
     use serde::Serialize as _;
     let mut out = Vec::new();
     let formatter = serde_json::ser::PrettyFormatter::with_indent(b" ");

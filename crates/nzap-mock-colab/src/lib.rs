@@ -12,13 +12,18 @@
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use axum::extract::{Request, State};
+use axum::middleware::{self, Next};
+use axum::response::Response;
 use axum::Router;
 use tokio::sync::oneshot;
 
+mod control;
 mod oauth;
+mod runtime;
 pub mod state;
 
-pub use state::{MockState, RecordedRequest};
+pub use state::{MockAssignment, MockFile, MockRuntime, MockState, RecordedRequest};
 
 /// Shared mock state, handed to every route.
 pub type Shared = Arc<Mutex<MockState>>;
@@ -75,5 +80,62 @@ impl Drop for MockGoogle {
 }
 
 fn router(state: Shared) -> Router {
-    Router::new().merge(oauth::routes()).with_state(state)
+    Router::new()
+        .merge(oauth::routes())
+        .merge(control::routes())
+        .merge(runtime::routes())
+        .layer(middleware::from_fn_with_state(state.clone(), record))
+        .with_state(state)
+}
+
+/// Remember every request so tests can assert headers and parameters.
+async fn record(State(state): State<Shared>, request: Request, next: Next) -> Response {
+    let query = request
+        .uri()
+        .query()
+        .map(|query| {
+            query
+                .split('&')
+                .filter_map(|pair| {
+                    let (key, value) = pair.split_once('=').unwrap_or((pair, ""));
+                    Some((decode(key)?, decode(value)?))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let headers = request
+        .headers()
+        .iter()
+        .map(|(name, value)| {
+            (name.as_str().to_owned(), value.to_str().unwrap_or_default().to_owned())
+        })
+        .collect();
+    let recorded = RecordedRequest {
+        method: request.method().to_string(),
+        path: request.uri().path().to_owned(),
+        query,
+        headers,
+    };
+    state.lock().expect("mock state").requests.push(recorded);
+    next.run(request).await
+}
+
+/// `application/x-www-form-urlencoded` component decoding.
+fn decode(text: &str) -> Option<String> {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        match bytes[index] {
+            b'+' => out.push(b' '),
+            b'%' if index + 2 < bytes.len() => {
+                let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+                out.push(u8::from_str_radix(hex, 16).ok()?);
+                index += 2;
+            }
+            byte => out.push(byte),
+        }
+        index += 1;
+    }
+    String::from_utf8(out).ok()
 }

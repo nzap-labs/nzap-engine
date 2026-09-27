@@ -10,10 +10,12 @@ pub mod auth;
 pub mod colab;
 pub mod config;
 pub mod error;
+pub mod history;
 pub mod http;
 pub mod paths;
 pub mod runtime;
 pub mod secrets;
+pub mod session;
 
 pub use error::{Error, ErrorCode, ErrorPayload, Result};
 
