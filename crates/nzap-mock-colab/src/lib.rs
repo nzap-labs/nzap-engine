@@ -21,6 +21,7 @@ use axum::Router;
 use tokio::sync::oneshot;
 
 mod control;
+mod files;
 mod kernel;
 mod oauth;
 mod runtime;
@@ -90,6 +91,7 @@ fn router(state: Shared) -> Router {
         .merge(runtime::routes())
         .merge(kernel::routes())
         .merge(tty::routes())
+        .merge(files::routes())
         .layer(middleware::from_fn_with_state(state.clone(), record))
         .with_state(state)
 }

@@ -6,7 +6,7 @@
 //! | code contains                         | behaviour                                   |
 //! |---------------------------------------|---------------------------------------------|
 //! | `print("…")` / `print(params["k"])`   | a stdout stream per call                     |
-//! | `params = {…}` (JSON)                 | defines `params` for later `print`s          |
+//! | `params = _nzap_json.loads("…")`      | defines `params` for later `print`s          |
 //! | `sys.exit(N)`                         | `SystemExit` error with value `N`            |
 //! | `raise` / `fail`                      | `ValueError: boom`                           |
 //! | `input(`                              | `input_request`, resumes on `input_reply`    |
@@ -343,7 +343,16 @@ impl Kernel {
         let mut status = "ok";
         for line in code.lines() {
             let trimmed = line.trim();
-            if let Some(json_text) = trimmed.strip_prefix("params = ") {
+            if let Some(literal) = trimmed
+                .strip_prefix("params = _nzap_json.loads(")
+                .and_then(|rest| rest.strip_suffix(')'))
+            {
+                // NZAP Engine's injection: JSON inside a (JSON-compatible) string literal.
+                self.params = serde_json::from_str::<String>(literal)
+                    .ok()
+                    .and_then(|text| serde_json::from_str(&text).ok())
+                    .unwrap_or_else(|| json!({}));
+            } else if let Some(json_text) = trimmed.strip_prefix("params = ") {
                 self.params = serde_json::from_str(json_text).unwrap_or_else(|_| json!({}));
             } else if let Some(text) = print_arg(trimmed, &self.params) {
                 self.stream(socket, &parent, format!("{text}\n")).await?;

@@ -9,16 +9,20 @@
 pub mod auth;
 pub mod colab;
 pub mod config;
+pub mod engine;
 pub mod error;
 pub mod history;
 pub mod http;
+pub mod notebooks;
 pub mod ops;
 pub mod paths;
 pub mod python;
 pub mod runtime;
 pub mod secrets;
 pub mod session;
+pub mod settings;
 
+pub use engine::{Engine, EngineOptions};
 pub use error::{Error, ErrorCode, ErrorPayload, Result};
 
 /// The engine version, reported in the app's About panel and user agent.

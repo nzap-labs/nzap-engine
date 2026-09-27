@@ -1,0 +1,137 @@
+{
+  "version": 1,
+  "notebooks": [
+    {
+      "slug": "gpu-check",
+      "title": "GPU / TPU Check",
+      "description": "Shows the accelerator attached to the runtime (nvidia-smi, PyTorch and optionally JAX).",
+      "tags": [
+        "diagnostics",
+        "gpu"
+      ],
+      "author": "NZAP Labs",
+      "params": [
+        {
+          "key": "check_jax",
+          "label": "Also list JAX devices",
+          "type": "boolean",
+          "default": false,
+          "description": "Useful on TPU runtimes."
+        }
+      ],
+      "source": "notebooks/gpu-check/notebook.py",
+      "sha256": "2422f2c3a3c9ebe22fd88d88a29c5ad412741f46fbccc7d0de6196a0f26924f1",
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Reports the accelerator attached to this runtime, as each framework sees it.\n\nimport shutil\nimport subprocess\n\nif shutil.which(\"nvidia-smi\"):\n    print(subprocess.run([\"nvidia-smi\"], capture_output=True, text=True).stdout)\nelse:\n    print(\"nvidia-smi not found: this runtime has no NVIDIA GPU.\")\n\ntry:\n    import torch\n\n    if torch.cuda.is_available():\n        for index in range(torch.cuda.device_count()):\n            props = torch.cuda.get_device_properties(index)\n            print(f\"torch sees cuda:{index} {props.name} ({props.total_memory / 2**30:.1f} GiB)\")\n    else:\n        print(\"torch: CUDA is not available\")\nexcept ImportError:\n    print(\"torch is not installed\")\n\nif params.get(\"check_jax\"):\n    try:\n        import jax\n\n        print(f\"jax devices: {jax.devices()}\")\n    except ImportError:\n        print(\"jax is not installed\")\n"
+    },
+    {
+      "slug": "print-notebook",
+      "title": "Print Notebook",
+      "description": "The smallest useful notebook: prints whatever string you give it.",
+      "tags": [
+        "starter"
+      ],
+      "author": "NZAP Labs",
+      "params": [
+        {
+          "key": "string_to_print",
+          "label": "String to print",
+          "type": "string",
+          "default": "Hello from NZAP",
+          "required": true,
+          "description": "Printed to the notebook output."
+        }
+      ],
+      "source": "notebooks/print-notebook/notebook.py",
+      "sha256": "eef7d26cd6794e376f22c77634458e7c96685a06c450293cb53bfaacaad3cf95",
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs; the keys come\n# from the notebook's declared parameters.\n\nprint(params[\"string_to_print\"])\n"
+    },
+    {
+      "slug": "runtime-report",
+      "title": "Runtime Report",
+      "description": "Prints what the connected Colab runtime actually is: Python version, platform, CPUs, disk and memory.",
+      "tags": [
+        "starter",
+        "diagnostics"
+      ],
+      "author": "NZAP Labs",
+      "params": [],
+      "source": "notebooks/runtime-report/notebook.py",
+      "sha256": "03537d0df6075a50ece67f56f465611d9ac0270e779d920e6c91612bc717d31c",
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# This notebook takes no parameters.\n\nimport os\nimport platform\nimport shutil\nimport sys\n\nprint(f\"Python {sys.version.split()[0]} on {platform.platform()}\")\nprint(f\"Machine: {platform.machine()}, {os.cpu_count()} CPUs\")\ntotal, used, free = shutil.disk_usage(\"/\")\nprint(f\"Disk: {used / 1e9:.1f} GB used of {total / 1e9:.1f} GB\")\ntry:\n    with open(\"/proc/meminfo\") as handle:\n        fields = dict(line.split(\":\", 1) for line in handle)\n    print(f\"RAM: {fields['MemTotal'].strip()} total, {fields['MemAvailable'].strip()} available\")\nexcept OSError:\n    pass\nprint(f\"params received: {params}\")\n"
+    },
+    {
+      "slug": "hf-sentiment",
+      "title": "Sentiment Analysis (Hugging Face)",
+      "description": "Scores each line of text as positive or negative with a DistilBERT classifier.",
+      "tags": [
+        "inference",
+        "nlp",
+        "huggingface"
+      ],
+      "author": "NZAP Labs",
+      "params": [
+        {
+          "key": "text",
+          "label": "Text (one item per line)",
+          "type": "text",
+          "default": "I love this!\nThis was a waste of time.",
+          "required": true
+        }
+      ],
+      "source": "notebooks/hf-sentiment/notebook.py",
+      "sha256": "04894f2c801d0ed6b1c82c3e303b2fde7936e972176d25822725a5f7c7a34b58",
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Classifies the sentiment of one or more lines of text.\n\nimport subprocess\nimport sys\n\ntry:\n    import transformers  # noqa: F401\nexcept ImportError:\n    subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"transformers\"])\n\nimport torch\nfrom transformers import pipeline\n\nclassifier = pipeline(\n    \"sentiment-analysis\",\n    model=\"distilbert-base-uncased-finetuned-sst-2-english\",\n    device=0 if torch.cuda.is_available() else -1,\n)\nlines = [line.strip() for line in params[\"text\"].splitlines() if line.strip()]\nfor line, result in zip(lines, classifier(lines)):\n    print(f\"{result['label']:>8} {result['score']:.3f}  {line}\")\n"
+    },
+    {
+      "slug": "hf-text-generation",
+      "title": "Text Generation (Hugging Face)",
+      "description": "Runs a Hugging Face text-generation model on your runtime and prints the continuation.",
+      "tags": [
+        "inference",
+        "llm",
+        "huggingface"
+      ],
+      "author": "NZAP Labs",
+      "params": [
+        {
+          "key": "model",
+          "label": "Model",
+          "type": "select",
+          "options": [
+            "distilgpt2",
+            "gpt2",
+            "Qwen/Qwen2.5-0.5B-Instruct"
+          ],
+          "default": "distilgpt2",
+          "required": true,
+          "description": "Larger models want a GPU runtime."
+        },
+        {
+          "key": "prompt",
+          "label": "Prompt",
+          "type": "text",
+          "default": "The best thing about running models on your own runtime is",
+          "required": true
+        },
+        {
+          "key": "max_new_tokens",
+          "label": "Max new tokens",
+          "type": "integer",
+          "default": 60,
+          "required": true
+        },
+        {
+          "key": "temperature",
+          "label": "Temperature",
+          "type": "number",
+          "default": 0.7,
+          "required": true,
+          "description": "0 for greedy decoding."
+        }
+      ],
+      "source": "notebooks/hf-text-generation/notebook.py",
+      "sha256": "7657ebb30516a13b90495ec7c5aebf2a605321086a1e15657a4ab815db9f881a",
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Generates text with a Hugging Face model on this runtime (GPU if present).\n\nimport subprocess\nimport sys\n\ntry:\n    import transformers  # noqa: F401\nexcept ImportError:\n    subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"transformers\"])\n\nimport torch\nfrom transformers import pipeline\n\ndevice = 0 if torch.cuda.is_available() else -1\ngenerator = pipeline(\"text-generation\", model=params[\"model\"], device=device)\nresult = generator(\n    params[\"prompt\"],\n    max_new_tokens=params[\"max_new_tokens\"],\n    do_sample=params[\"temperature\"] > 0,\n    temperature=max(params[\"temperature\"], 1e-5),\n)\nprint(result[0][\"generated_text\"])\n"
+    }
+  ]
+}

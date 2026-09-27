@@ -239,20 +239,20 @@ Each phase ends green in CI and with a commit and push to `main`.
 
 ### Phase 4 — Automations, run-file, import, jobs, notebooks
 
-- [ ] Automations: install (uv → pip), drivemount, gcp-auth
-- [ ] Run a `.py`/`.ipynb` with env and stop-on-error; executed-notebook output
-- [ ] Import from Colab/Drive/GitHub/HTTPS with the SSRF guard and size cap
-- [ ] Ephemeral jobs: assign → run → artifacts → release (always released)
-- [ ] Notebooks: GitHub catalog (index + SHA-256 + ETag cache + bundled fallback), local private store, fork, export, param validation + `params` injection
-- [ ] `nzap-notebooks` repo content (catalog, schema, CI validator, contributing guide)
+- [x] Automations: install (uv → pip), drivemount, gcp-auth
+- [x] Run a `.py`/`.ipynb` with env and stop-on-error; executed-notebook output
+- [x] Import from Colab/Drive/GitHub/HTTPS with the SSRF guard and size cap
+- [x] Ephemeral jobs: assign → run → artifacts → release (always released)
+- [x] Notebooks: GitHub catalog (index + SHA-256 + ETag cache + bundled fallback), local private store, fork, export, param validation + `params` injection
+- [x] `nzap-notebooks` repo content (catalog, schema, CI validator, contributing guide) — prepared locally; the GitHub repository still has to be created
 
 ### Phase 5 — Tauri shell
 
-- [ ] Commands + channels for the whole parity map, with typed errors
-- [ ] Plugins: opener (https only), dialog, log (redacted), single-instance, window-state
-- [ ] Capabilities, CSP, window config (native drag and drop off so HTML5 drop zones work)
-- [ ] Native save/open for downloads, uploads, exports and artifacts
-- [ ] Command-layer tests
+- [x] Commands + channels for the whole parity map, with typed errors
+- [x] Plugins: opener (https only, used from Rust), dialog, log, single-instance, window-state
+- [x] Capabilities, CSP, window config (native drag and drop off so HTML5 drop zones work)
+- [x] Native save dialogs for downloads, exports and artifacts (uploads use HTML file inputs and drag and drop; job artifacts land in the artifacts folder)
+- [x] Command-layer tests
 
 ### Phase 6 — Frontend port
 

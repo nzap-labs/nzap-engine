@@ -168,6 +168,12 @@ impl From<serde_json::Error> for Error {
     }
 }
 
+impl From<Error> for ErrorPayload {
+    fn from(error: Error) -> Self {
+        error.payload()
+    }
+}
+
 /// What crosses IPC for a failed command.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]

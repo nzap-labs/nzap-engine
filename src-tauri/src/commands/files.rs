@@ -1,0 +1,129 @@
+//! A runtime's files, plus opening and saving local files for the UI.
+
+use nzap_core::session::FileListing;
+use nzap_core::Error;
+use serde_json::Value;
+use tauri::ipc::{InvokeBody, Request};
+use tauri::{AppHandle, State};
+
+use super::dialogs::{self, MAX_UPLOAD_BYTES};
+use crate::state::{AppState, CmdResult};
+
+#[tauri::command]
+pub async fn files_list(
+    state: State<'_, AppState>,
+    name: String,
+    path: Option<String>,
+) -> CmdResult<FileListing> {
+    state
+        .engine
+        .sessions
+        .list_files(&name, path.as_deref().unwrap_or_default())
+        .await
+        .map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn files_read(
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+) -> CmdResult<Value> {
+    state.engine.sessions.read_file(&name, &path).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn files_write(
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+    content: String,
+) -> CmdResult<Value> {
+    state.engine.sessions.write_file(&name, &path, &content).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn files_mkdir(
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+) -> CmdResult<Value> {
+    state.engine.sessions.make_directory(&name, &path).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn files_rename(
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+    new_path: String,
+) -> CmdResult<Value> {
+    state.engine.sessions.rename_file(&name, &path, &new_path).await.map_err(Into::into)
+}
+
+#[tauri::command]
+pub async fn files_delete(state: State<'_, AppState>, name: String, path: String) -> CmdResult<()> {
+    state.engine.sessions.delete_file(&name, &path).await.map_err(Into::into)
+}
+
+/// Download a runtime file to a location the user picks.
+#[tauri::command]
+pub async fn files_download(
+    app: AppHandle,
+    state: State<'_, AppState>,
+    name: String,
+    path: String,
+) -> CmdResult<Option<String>> {
+    let bytes = state.engine.sessions.download_file(&name, &path).await?;
+    let filename = path
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("download");
+    dialogs::save_bytes(&app, filename, None, bytes).await.map_err(Into::into)
+}
+
+fn header(request: &Request<'_>, name: &str) -> Option<String> {
+    let raw = request.headers().get(name)?.to_str().ok()?;
+    Some(percent_encoding::percent_decode_str(raw).decode_utf8_lossy().into_owned())
+}
+
+/// Upload bytes dropped onto the file manager. The body is raw bytes; the
+/// runtime and remote path travel in `x-nzap-session` / `x-nzap-path`
+/// (percent-encoded).
+#[tauri::command]
+pub async fn files_upload_bytes(
+    state: State<'_, AppState>,
+    request: Request<'_>,
+) -> CmdResult<Value> {
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err(Error::invalid("Upload a file's raw bytes.").into());
+    };
+    if bytes.len() as u64 > MAX_UPLOAD_BYTES {
+        return Err(Error::invalid("That file is larger than 512 MB.").into());
+    }
+    let (Some(name), Some(path)) =
+        (header(&request, "x-nzap-session"), header(&request, "x-nzap-path"))
+    else {
+        return Err(Error::invalid("Missing runtime or path.").into());
+    };
+    let bytes = bytes.clone();
+    state.engine.sessions.upload_file(&name, &path, &bytes).await.map_err(Into::into)
+}
+
+/// Save text the UI produced (an executed notebook, a job log) to a file the
+/// user picks.
+#[tauri::command]
+pub async fn save_text_file(
+    app: AppHandle,
+    filename: String,
+    content: String,
+) -> CmdResult<Option<String>> {
+    let filename = filename
+        .rsplit(['/', '\\'])
+        .next()
+        .filter(|name| !name.is_empty())
+        .unwrap_or("download.txt");
+    dialogs::save_bytes(&app, filename, None, content.into_bytes()).await.map_err(Into::into)
+}
