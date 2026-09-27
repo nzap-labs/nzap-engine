@@ -152,9 +152,6 @@ mod tests {
             assert!(check_external_url(refused).is_err(), "{refused}");
         }
         // The loopback exception exists only in development builds.
-        assert_eq!(
-            check_external_url("http://127.0.0.1:9/auth").is_ok(),
-            cfg!(debug_assertions)
-        );
+        assert_eq!(check_external_url("http://127.0.0.1:9/auth").is_ok(), cfg!(debug_assertions));
     }
 }
