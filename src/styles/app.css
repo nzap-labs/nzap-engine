@@ -34,7 +34,9 @@
   --color-line: var(--color-quiet-line);
   --color-on-sunshine: var(--color-on-sunshine);
 
-  --font-sans: 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-sans:
+    'DM Sans Variable', 'DM Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
 
   --radius-panel: 16px;
   --radius-feature: 24px;

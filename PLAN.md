@@ -256,12 +256,12 @@ Each phase ends green in CI and with a commit and push to `main`.
 
 ### Phase 6 — Frontend port
 
-- [ ] Design system, shell and sidebar from legacy-nzap (Colab-first navigation)
-- [ ] IPC data layer that keeps legacy hook names and types
-- [ ] Colab workspace: connection card, consumption chip, runtimes, console, setup, history, terminal, run/jobs, files, notebooks (public + yours)
-- [ ] Profile, Account (Google identity, Colab plan, CCU, disconnect), Settings
-- [ ] Onboarding: first launch → "Connect Google"
-- [ ] Vitest suites
+- [x] Design system, shell and sidebar from legacy-nzap (Colab-first navigation)
+- [x] IPC data layer that keeps legacy hook names and types
+- [x] Colab workspace: connection card, consumption chip, runtimes, console, setup, history, terminal, run/jobs, files, notebooks (public + yours)
+- [x] Account (Google identity, connection, Colab plan and compute units, privacy — replaces profile/account/credits) and Settings (keep-alive, catalog, artifacts folder, OAuth client, diagnostics)
+- [x] Onboarding: first launch → "Connect Google"
+- [x] Vitest suites, driven through a simulated engine (`src/dev/fake-engine.ts`) that also powers `npm run dev` in a browser
 
 ### Phase 7 — End-to-end tests
 
