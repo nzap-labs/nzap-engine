@@ -55,8 +55,13 @@ Prerequisites: Node 22+, the Rust stable toolchain, and the
 ```bash
 npm install
 npm run app:dev      # desktop app with hot reload
-npm run dev          # frontend only, in a browser
+npm run dev          # the UI in a browser, against a simulated engine
 ```
+
+`npm run dev` needs no Rust toolchain or Google account: in a plain browser the
+UI talks to `src/dev/fake-engine.ts`, which imitates the engine (including a
+Colab kernel, a terminal and Drive consent), and `window.__NZAP_FAKE__` lets you
+change its state. Production builds never include it.
 
 | Command                                              | What it does                      |
 | ---------------------------------------------------- | --------------------------------- |

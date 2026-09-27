@@ -2,13 +2,19 @@ import path from 'node:path'
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import { tanstackRouter } from '@tanstack/router-plugin/vite'
 
 // `tauri dev` points the webview at this server; the port must match
 // `build.devUrl` in src-tauri/tauri.conf.json.
 const DEV_PORT = 1420
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    // must run before the react plugin so routeTree.gen.ts is fresh
+    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
+    react(),
+    tailwindcss(),
+  ],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, './src'),
@@ -36,6 +42,7 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     include: ['src/**/*.test.{ts,tsx}'],
+    setupFiles: ['src/test/setup.ts'],
     restoreMocks: true,
   },
 })
