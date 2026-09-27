@@ -84,15 +84,6 @@ pub async fn files_download(
     dialogs::save_bytes(&app, filename, None, bytes).await.map_err(Into::into)
 }
 
-fn join_remote(dir: &str, filename: &str) -> String {
-    let dir = dir.trim_matches('/');
-    if dir.is_empty() {
-        filename.to_owned()
-    } else {
-        format!("{dir}/{filename}")
-    }
-}
-
 fn header(request: &Request<'_>, name: &str) -> Option<String> {
     let raw = request.headers().get(name)?.to_str().ok()?;
     Some(percent_encoding::percent_decode_str(raw).decode_utf8_lossy().into_owned())
@@ -135,15 +126,4 @@ pub async fn save_text_file(
         .filter(|name| !name.is_empty())
         .unwrap_or("download.txt");
     dialogs::save_bytes(&app, filename, None, content.into_bytes()).await.map_err(Into::into)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn remote_paths() {
-        assert_eq!(join_remote("", "a.txt"), "a.txt");
-        assert_eq!(join_remote("/content/", "a.txt"), "content/a.txt");
-    }
 }

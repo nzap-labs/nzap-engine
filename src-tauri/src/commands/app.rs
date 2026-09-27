@@ -57,7 +57,9 @@ pub fn reveal_path(app: AppHandle, path: String) -> CmdResult<()> {
     if !path.exists() {
         return Err(Error::not_found("That file no longer exists.").into());
     }
-    app.opener().reveal_item_in_dir(&path).map_err(|error| Error::internal(error.to_string()).into())
+    app.opener()
+        .reveal_item_in_dir(&path)
+        .map_err(|error| Error::internal(error.to_string()).into())
 }
 
 #[tauri::command]
