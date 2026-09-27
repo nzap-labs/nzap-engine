@@ -36,14 +36,13 @@ fn tls_config() -> Arc<rustls::ClientConfig> {
 /// Open a WebSocket to `url` with extra request headers. Error messages
 /// never include the URL (it may carry a runtime-proxy token).
 pub async fn connect(url: &str, headers: &[(&'static str, String)]) -> Result<WsStream> {
-    let mut request = url
-        .into_client_request()
-        .map_err(|_| Error::internal("Invalid runtime socket URL."))?;
+    let mut request =
+        url.into_client_request().map_err(|_| Error::internal("Invalid runtime socket URL."))?;
     for (name, value) in headers {
         let name = HeaderName::from_bytes(name.as_bytes())
             .map_err(|_| Error::internal("Invalid socket header name."))?;
-        let value =
-            HeaderValue::from_str(value).map_err(|_| Error::internal("Invalid socket header value."))?;
+        let value = HeaderValue::from_str(value)
+            .map_err(|_| Error::internal("Invalid socket header value."))?;
         request.headers_mut().insert(name, value);
     }
 

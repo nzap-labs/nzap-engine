@@ -9,6 +9,8 @@
 //! The mock is deliberately strict where Google is: PKCE is verified, codes
 //! are single-use, and bearer tokens are checked on every protected route.
 
+#![allow(clippy::result_large_err)] // test infrastructure: axum responses as errors
+
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, MutexGuard};
 

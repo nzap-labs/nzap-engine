@@ -271,7 +271,14 @@ impl KernelChannel {
         self.shared.last_error.lock().ok().and_then(|error| error.clone())
     }
 
-    fn send(&self, channel: &str, msg_type: &str, content: Value, header_value: Option<Value>, parent: Value) -> Result<String> {
+    fn send(
+        &self,
+        channel: &str,
+        msg_type: &str,
+        content: Value,
+        header_value: Option<Value>,
+        parent: Value,
+    ) -> Result<String> {
         let header_value = header_value.unwrap_or_else(|| header(msg_type, &self.session_id));
         let msg_id = header_value["msg_id"].as_str().unwrap_or_default().to_owned();
         let message = json!({
@@ -297,20 +304,37 @@ impl KernelChannel {
         Ok(())
     }
 
-    fn register(&self, msg_id: &str, emit: Option<mpsc::UnboundedSender<Value>>) -> Result<(oneshot::Receiver<Value>, oneshot::Receiver<()>, PendingGuard)> {
+    fn register(
+        &self,
+        msg_id: &str,
+        emit: Option<mpsc::UnboundedSender<Value>>,
+    ) -> Result<(oneshot::Receiver<Value>, oneshot::Receiver<()>, PendingGuard)> {
         let (reply_tx, reply_rx) = oneshot::channel();
         let (idle_tx, idle_rx) = oneshot::channel();
         self.shared
             .pending
             .lock()
             .map_err(|_| Error::internal("Kernel state lock poisoned."))?
-            .insert(msg_id.to_owned(), Pending { emit, reply: Some(reply_tx), idle: Some(idle_tx) });
-        Ok((reply_rx, idle_rx, PendingGuard { shared: self.shared.clone(), msg_id: msg_id.to_owned() }))
+            .insert(
+                msg_id.to_owned(),
+                Pending { emit, reply: Some(reply_tx), idle: Some(idle_tx) },
+            );
+        Ok((
+            reply_rx,
+            idle_rx,
+            PendingGuard { shared: self.shared.clone(), msg_id: msg_id.to_owned() },
+        ))
     }
 
-    async fn wait(reply: oneshot::Receiver<Value>, idle: oneshot::Receiver<()>, timeout: Duration) -> Result<Value> {
+    async fn wait(
+        reply: oneshot::Receiver<Value>,
+        idle: oneshot::Receiver<()>,
+        timeout: Duration,
+    ) -> Result<Value> {
         let content = match tokio::time::timeout(timeout, reply).await {
-            Err(_) => return Err(Error::runtime(None, "Timed out waiting for the kernel to reply.")),
+            Err(_) => {
+                return Err(Error::runtime(None, "Timed out waiting for the kernel to reply."))
+            }
             Ok(Err(_)) => return Err(Error::runtime(None, "The kernel connection closed.")),
             Ok(Ok(content)) => content,
         };
@@ -474,7 +498,10 @@ mod tests {
             Some(json!({"type": "stream", "name": "stderr", "text": "x"}))
         );
         assert_eq!(
-            to_ui_event("execute_result", &json!({"execution_count": 2, "data": {"text/plain": "4"}})),
+            to_ui_event(
+                "execute_result",
+                &json!({"execution_count": 2, "data": {"text/plain": "4"}})
+            ),
             Some(json!({"type": "result", "execution_count": 2, "data": {"text/plain": "4"}}))
         );
         assert_eq!(

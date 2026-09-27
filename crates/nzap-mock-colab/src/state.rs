@@ -237,7 +237,12 @@ impl MockState {
     }
 
     /// Create a VM directly (e.g. one "allocated in the Colab web UI").
-    pub fn add_assignment(&mut self, accelerator: &str, variant: u8, machine_shape: u8) -> MockAssignment {
+    pub fn add_assignment(
+        &mut self,
+        accelerator: &str,
+        variant: u8,
+        machine_shape: u8,
+    ) -> MockAssignment {
         let id = self.next_id("vm");
         let assignment = MockAssignment {
             endpoint: format!("m-s-{}-{id}", accelerator.to_ascii_lowercase()),

@@ -4,5 +4,7 @@
 pub mod manager;
 pub mod state;
 
-pub use manager::{Emit, FileEntry, FileListing, SessionManager, StopOutcome, DEFAULT_EXECUTE_TIMEOUT};
+pub use manager::{
+    Emit, FileEntry, FileListing, SessionManager, StopOutcome, DEFAULT_EXECUTE_TIMEOUT,
+};
 pub use state::{AssignmentView, SessionState, SessionView};

@@ -215,7 +215,13 @@ fn plain_text(out: &Value) -> Option<String> {
 /// `2026-01-01 12:00:00` from an RFC 3339 timestamp.
 fn ts(event: &Value) -> String {
     let raw = event.get("timestamp").and_then(Value::as_str).unwrap_or_default();
-    raw.split('.').next().unwrap_or_default().split('+').next().unwrap_or_default().replace('T', " ")
+    raw.split('.')
+        .next()
+        .unwrap_or_default()
+        .split('+')
+        .next()
+        .unwrap_or_default()
+        .replace('T', " ")
 }
 
 fn field<'a>(event: &'a Value, key: &str) -> &'a str {
@@ -264,7 +270,10 @@ pub fn to_notebook(events: &[Value], session: &str) -> Value {
                 event.get("execution_count").cloned().unwrap_or(Value::Null),
             )),
             "automation" => {
-                cells.push(markdown_cell(format!("### Automation: {} ({when})", field(event, "op"))));
+                cells.push(markdown_cell(format!(
+                    "### Automation: {} ({when})",
+                    field(event, "op")
+                )));
                 let code = field(event, "code");
                 if !code.is_empty() {
                     cells.push(code_cell(code, Vec::new(), Value::Null));
@@ -334,7 +343,10 @@ pub fn to_markdown(events: &[Value], session: &str) -> String {
         let when = ts(event);
         match field(event, "event_type") {
             "execution" => {
-                lines.push(format!("### Execution ({when})\n```python\n{}\n```\n", field(event, "code")));
+                lines.push(format!(
+                    "### Execution ({when})\n```python\n{}\n```\n",
+                    field(event, "code")
+                ));
                 for out in outputs_of(event) {
                     if let Some(text) = plain_text(&out).filter(|text| !text.is_empty()) {
                         lines.push(format!("**Output**:\n```\n{}\n```\n", text.trim_end()));
@@ -346,7 +358,9 @@ pub fn to_markdown(events: &[Value], session: &str) -> String {
                 field(event, "endpoint")
             )),
             "session_terminated" => lines.push(format!("## Session Terminated: {when}\n")),
-            "automation" => lines.push(format!("### Automation: {} ({when})\n", field(event, "op"))),
+            "automation" => {
+                lines.push(format!("### Automation: {} ({when})\n", field(event, "op")))
+            }
             "file_operation" => lines.push(format!(
                 "*File Operation*: `{}` on `{}`\n",
                 field(event, "op"),
@@ -371,7 +385,9 @@ pub fn to_text(events: &[Value], session: &str) -> String {
                 .map(|object| {
                     object
                         .iter()
-                        .filter(|(key, _)| !matches!(key.as_str(), "timestamp" | "event_type" | "outputs"))
+                        .filter(|(key, _)| {
+                            !matches!(key.as_str(), "timestamp" | "event_type" | "outputs")
+                        })
                         .map(|(key, value)| (key.clone(), value.clone()))
                         .collect()
                 })
@@ -464,7 +480,11 @@ mod tests {
         let outputs = collect_outputs(&events);
         assert_eq!(outputs.len(), 3);
         assert_eq!(outputs[0]["text"], "ab");
-        let cleared = collect_outputs(&[events[1].clone(), json!({"type": "clear_output"}), events[3].clone()]);
+        let cleared = collect_outputs(&[
+            events[1].clone(),
+            json!({"type": "clear_output"}),
+            events[3].clone(),
+        ]);
         assert_eq!(cleared, vec![events[3].clone()]);
     }
 
@@ -490,10 +510,14 @@ mod tests {
         let notebook = to_notebook(&sample(), "box");
         assert_eq!(notebook["nbformat"], 4);
         let cells = notebook["cells"].as_array().unwrap();
-        let kinds: Vec<&str> = cells.iter().map(|cell| cell["cell_type"].as_str().unwrap()).collect();
+        let kinds: Vec<&str> =
+            cells.iter().map(|cell| cell["cell_type"].as_str().unwrap()).collect();
         assert_eq!(
             kinds,
-            vec!["markdown", "markdown", "code", "markdown", "code", "markdown", "markdown", "markdown"]
+            vec![
+                "markdown", "markdown", "code", "markdown", "code", "markdown", "markdown",
+                "markdown"
+            ]
         );
         assert_eq!(cells[2]["source"], "print('hi')");
         assert_eq!(cells[2]["outputs"][0]["text"], "hi\n");

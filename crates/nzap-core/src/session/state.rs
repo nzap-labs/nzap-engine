@@ -77,7 +77,11 @@ pub fn scalar_text(value: Option<&serde_json::Value>, fallback: &str) -> String 
 
 impl SessionState {
     /// Build from a `/tun/m/assign` or `/tun/m/assignments` entry.
-    pub fn from_assignment(name: &str, assignment: &serde_json::Value, fallback_accelerator: &str) -> Self {
+    pub fn from_assignment(
+        name: &str,
+        assignment: &serde_json::Value,
+        fallback_accelerator: &str,
+    ) -> Self {
         let proxy = assignment.get("runtimeProxyInfo");
         let text = |value: Option<&serde_json::Value>| {
             value.and_then(serde_json::Value::as_str).unwrap_or_default().to_owned()
@@ -106,7 +110,12 @@ impl SessionState {
         hardware_label(&self.accelerator)
     }
 
-    pub fn view(&self, colab_host: &str, connected: bool, kernel_state: Option<String>) -> SessionView {
+    pub fn view(
+        &self,
+        colab_host: &str,
+        connected: bool,
+        kernel_state: Option<String>,
+    ) -> SessionView {
         let now = unix_now();
         let uptime = (now - self.created_at).max(0.0);
         let idle = (now - self.last_activity).max(0.0);

@@ -24,10 +24,7 @@ pub(crate) fn routes() -> Router<Shared> {
         .route("/tun/m/unassign/{endpoint}", get(unassign_token).post(unassign))
         .route("/tun/m/{endpoint}/keep-alive/", get(keep_alive))
         .route("/tun/m/ccu-info", get(ccu_info))
-        .route(
-            "/tun/m/credentials-propagation/{endpoint}",
-            get(propagation_token).post(propagate),
-        )
+        .route("/tun/m/credentials-propagation/{endpoint}", get(propagation_token).post(propagate))
         .route("/v1/user-info", get(user_info))
         .route("/v1beta/runtimespecs", get(runtime_specs))
 }
@@ -75,7 +72,9 @@ async fn assign_token(
     }
     let token = mock.next_id("xsrf");
     mock.xsrf_tokens.insert(token.clone());
-    xssi(json!({ "acc": "acc-1", "nbh": query["nbh"], "token": token, "variant": query["variant"] }))
+    xssi(
+        json!({ "acc": "acc-1", "nbh": query["nbh"], "token": token, "variant": query["variant"] }),
+    )
 }
 
 async fn assign(

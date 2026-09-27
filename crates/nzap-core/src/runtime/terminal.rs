@@ -40,9 +40,9 @@ pub fn is_valid_frame(text: &str) -> bool {
     let keys: Vec<&str> = frame.keys().map(String::as_str).collect();
     match keys.as_slice() {
         ["data"] => frame["data"].is_string(),
-        ["cols", "rows"] | ["rows", "cols"] => ["cols", "rows"].iter().all(|key| {
-            frame[*key].as_u64().is_some_and(|value| value > 0 && value < 10_000)
-        }),
+        ["cols", "rows"] | ["rows", "cols"] => ["cols", "rows"]
+            .iter()
+            .all(|key| frame[*key].as_u64().is_some_and(|value| value > 0 && value < 10_000)),
         _ => false,
     }
 }

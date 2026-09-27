@@ -42,7 +42,8 @@ async fn browse_read_and_write_files() {
     assert_eq!(names(&content), vec!["sample_data"]);
 
     // Both auth forms travel on every request.
-    let request = env.mock.state().requests_to(&format!("/proxy/{endpoint}/api/contents")).remove(0);
+    let request =
+        env.mock.state().requests_to(&format!("/proxy/{endpoint}/api/contents")).remove(0);
     assert_eq!(request.param("colab-runtime-proxy-token"), Some(proxy.token()));
     assert_eq!(request.header("x-colab-runtime-proxy-token"), Some(proxy.token()));
     assert_eq!(request.param("authuser"), Some("0"));

@@ -329,7 +329,10 @@ impl SessionManager {
                 AssignmentView {
                     managed: local.contains(&endpoint),
                     endpoint,
-                    accelerator: hardware_label(&scalar_text(assignment.get("accelerator"), "NONE")),
+                    accelerator: hardware_label(&scalar_text(
+                        assignment.get("accelerator"),
+                        "NONE",
+                    )),
                     variant: scalar_text(assignment.get("variant"), "0"),
                     shape: shape_display_label(&scalar_text(assignment.get("machineShape"), "0"))
                         .to_owned(),
@@ -437,7 +440,8 @@ impl SessionManager {
 
     async fn open_channel(&self, name: &str) -> Result<Arc<KernelChannel>> {
         let state = self.get(name)?;
-        let kernel_id = state.kernel_id.clone().ok_or_else(|| Error::runtime(None, "No kernel."))?;
+        let kernel_id =
+            state.kernel_id.clone().ok_or_else(|| Error::runtime(None, "No kernel."))?;
         let proxy = self.proxy(name)?;
         let (requests_tx, mut requests_rx) = mpsc::unbounded_channel::<ColabRequest>();
         let channel =
@@ -639,7 +643,12 @@ impl SessionManager {
 
     // ------------------------------------------------ credential requests
 
-    async fn handle_colab_request(&self, name: &str, channel: Arc<KernelChannel>, request: ColabRequest) {
+    async fn handle_colab_request(
+        &self,
+        name: &str,
+        channel: Arc<KernelChannel>,
+        request: ColabRequest,
+    ) {
         let reply_now = |channel: &KernelChannel, request: &ColabRequest| {
             if let Err(error) = channel.send_input_reply(request.reply(), request.header.clone()) {
                 tracing::info!("Could not answer colab_request: {error}");
@@ -886,7 +895,8 @@ impl SessionManager {
 
     pub async fn list_files(&self, name: &str, path: &str) -> Result<FileListing> {
         let listing = self.proxy(name)?.list_contents(path).await?;
-        let text = |value: &Value, key: &str| value.get(key).and_then(Value::as_str).map(str::to_owned);
+        let text =
+            |value: &Value, key: &str| value.get(key).and_then(Value::as_str).map(str::to_owned);
         let kind = text(&listing, "type").unwrap_or_default();
         let mut entries: Vec<FileEntry> = if kind == "directory" {
             listing
@@ -907,7 +917,8 @@ impl SessionManager {
             Vec::new()
         };
         entries.sort_by(|a, b| {
-            (a.kind != "directory", a.name.to_lowercase()).cmp(&(b.kind != "directory", b.name.to_lowercase()))
+            (a.kind != "directory", a.name.to_lowercase())
+                .cmp(&(b.kind != "directory", b.name.to_lowercase()))
         });
         Ok(FileListing {
             path: text(&listing, "path").unwrap_or_else(|| path.trim_matches('/').to_owned()),
@@ -976,7 +987,8 @@ impl SessionManager {
         let proxy = self.proxy(name)?;
         let manager = self.clone();
         let owner = name.to_owned();
-        let terminal = Terminal::open(&proxy, sink, Arc::new(move || manager.touch(&owner))).await?;
+        let terminal =
+            Terminal::open(&proxy, sink, Arc::new(move || manager.touch(&owner))).await?;
         self.inner.history.log(name, "console_started", json!({}));
         Ok(terminal)
     }

@@ -77,7 +77,9 @@ fn children<'a>(runtime: &'a MockRuntime, dir: &str) -> Vec<(&'a String, &'a Moc
         .files
         .iter()
         .filter(|(path, _)| {
-            path.starts_with(&prefix) && !path[prefix.len()..].is_empty() && !path[prefix.len()..].contains('/')
+            path.starts_with(&prefix)
+                && !path[prefix.len()..].is_empty()
+                && !path[prefix.len()..].contains('/')
         })
         .collect()
 }
@@ -143,7 +145,10 @@ fn read(runtime: &MockRuntime, path: &str, query: &HashMap<String, String>) -> R
     }
     match runtime.files.get(path) {
         Some(file) => Json(model(runtime, path, file, with_content)).into_response(),
-        None => (StatusCode::NOT_FOUND, Json(json!({"message": format!("No such file or directory: {path}")})))
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"message": format!("No such file or directory: {path}")})),
+        )
             .into_response(),
     }
 }
@@ -207,7 +212,8 @@ async fn put_contents(
             }
         }
     };
-    if matches!(runtime.files.get(&path), Some(MockFile::Directory)) && file != MockFile::Directory {
+    if matches!(runtime.files.get(&path), Some(MockFile::Directory)) && file != MockFile::Directory
+    {
         return (StatusCode::BAD_REQUEST, "a directory exists at that path").into_response();
     }
     ensure_parents(runtime, &path);
@@ -225,7 +231,8 @@ async fn rename_contents(
     let mut mock = state.lock().expect("mock state");
     let runtime = runtime_or_return!(mock, endpoint, headers, query);
     let from = path.trim_matches('/').to_owned();
-    let to = body.get("path").and_then(Value::as_str).unwrap_or_default().trim_matches('/').to_owned();
+    let to =
+        body.get("path").and_then(Value::as_str).unwrap_or_default().trim_matches('/').to_owned();
     if to.is_empty() {
         return (StatusCode::BAD_REQUEST, "missing new path").into_response();
     }

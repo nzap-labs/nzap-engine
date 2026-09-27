@@ -201,7 +201,8 @@ async fn credential_propagation_with_and_without_consent() {
     let a = env.client.assign(&request(None, None, false), None).await.unwrap();
     let endpoint = a["endpoint"].as_str().unwrap().to_owned();
 
-    let granted = env.client.propagate_credentials(&endpoint, AuthType::DfsEphemeral).await.unwrap();
+    let granted =
+        env.client.propagate_credentials(&endpoint, AuthType::DfsEphemeral).await.unwrap();
     assert!(granted.success);
     assert_eq!(granted.unauthorized_redirect_uri, None);
     let expected: Vec<(String, String, String)> = vec![
@@ -221,7 +222,8 @@ async fn credential_propagation_with_and_without_consent() {
     );
     // Without consent only the dry run is sent.
     let posts = env.mock.state().propagations.clone();
-    let dry_run_only = vec![(endpoint.clone(), String::from("auth_user_ephemeral"), String::from("true"))];
+    let dry_run_only =
+        vec![(endpoint.clone(), String::from("auth_user_ephemeral"), String::from("true"))];
     assert_eq!(posts, dry_run_only);
 
     let calls = env.mock.state().requests_matching("POST", "/tun/m/credentials-propagation/");
