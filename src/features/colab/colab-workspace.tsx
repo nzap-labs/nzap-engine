@@ -32,6 +32,23 @@ const TABS: { id: Tab; label: string; icon: typeof Cpu }[] = [
   { id: 'files', label: 'Files', icon: FolderOpen },
 ]
 
+/** Arrow keys, Home and End move between tabs (WAI-ARIA tabs pattern). */
+function tabAfterKey(current: Tab, key: string): Tab | null {
+  const index = TABS.findIndex((item) => item.id === current)
+  const last = TABS.length - 1
+  const target =
+    key === 'ArrowRight'
+      ? (index + 1) % TABS.length
+      : key === 'ArrowLeft'
+        ? (index - 1 + TABS.length) % TABS.length
+        : key === 'Home'
+          ? 0
+          : key === 'End'
+            ? last
+            : null
+  return target === null ? null : TABS[target].id
+}
+
 /**
  * The Colab workspace: connect Google, launch runtimes, run code, browse
  * files. Every action goes through the engine, which talks to Google with the
@@ -78,16 +95,30 @@ export function ColabWorkspace() {
             <Onboarding />
           ) : (
             <>
-              <div className="flex flex-wrap gap-2" role="tablist" aria-label="Colab workspace">
+              <div
+                className="flex flex-wrap gap-2"
+                role="tablist"
+                aria-label="Colab workspace"
+                onKeyDown={(event) => {
+                  const next = tabAfterKey(tab, event.key)
+                  if (!next) return
+                  event.preventDefault()
+                  setTab(next)
+                  document.getElementById(`colab-tab-${next}`)?.focus()
+                }}
+              >
                 {TABS.map((item) => (
                   <button
                     key={item.id}
+                    id={`colab-tab-${item.id}`}
                     type="button"
                     role="tab"
                     aria-selected={tab === item.id}
+                    aria-controls="colab-tabpanel"
+                    tabIndex={tab === item.id ? 0 : -1}
                     onClick={() => setTab(item.id)}
                     className={cn(
-                      'inline-flex h-9 cursor-pointer items-center gap-2 rounded-3xl border px-4 text-sm font-medium transition-colors',
+                      'inline-flex h-9 cursor-pointer items-center gap-2 rounded-3xl border px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink',
                       tab === item.id
                         ? 'border-ink bg-sunshine text-on-sunshine'
                         : 'border-ink text-ink hover:bg-paper-soft',
@@ -99,52 +130,56 @@ export function ColabWorkspace() {
                 ))}
               </div>
 
-              {tab === 'runtimes' && (
-                <div className="space-y-6">
-                  <NewRuntimeCard
-                    onCreated={(name) => {
-                      setActiveName(name)
-                      setTab('console')
-                    }}
+              <div id="colab-tabpanel" role="tabpanel" aria-labelledby={`colab-tab-${tab}`}>
+                {tab === 'runtimes' && (
+                  <div className="space-y-6">
+                    <NewRuntimeCard
+                      onCreated={(name) => {
+                        setActiveName(name)
+                        setTab('console')
+                      }}
+                    />
+                    <RuntimeList
+                      activeName={active}
+                      onSelect={(name) => {
+                        setActiveName(name)
+                        setTab('console')
+                      }}
+                    />
+                  </div>
+                )}
+
+                {tab === 'console' && (
+                  <div className="space-y-4">
+                    <Telemetry sessionName={active} />
+                    {/* Keyed by session so switching runtimes starts a clean transcript. */}
+                    <ConsolePanel key={active ?? 'none'} sessionName={active} />
+                    {active && <SetupCard key={`setup-${active}`} sessionName={active} />}
+                    {active && <HistoryPanel key={`history-${active}`} sessionName={active} />}
+                  </div>
+                )}
+
+                {tab === 'terminal' && (
+                  <TerminalPanel key={active ?? 'none'} sessionName={active} />
+                )}
+
+                {tab === 'run' && (
+                  <div className="space-y-6">
+                    <JobsPanel />
+                    <RunFilePanel key={active ?? 'none'} sessionName={active} />
+                  </div>
+                )}
+
+                {tab === 'notebooks' && (
+                  <NotebooksPanel
+                    canRun={Boolean(active)}
+                    runtimeName={active}
+                    onRun={setRunNotebook}
                   />
-                  <RuntimeList
-                    activeName={active}
-                    onSelect={(name) => {
-                      setActiveName(name)
-                      setTab('console')
-                    }}
-                  />
-                </div>
-              )}
+                )}
 
-              {tab === 'console' && (
-                <div className="space-y-4">
-                  <Telemetry sessionName={active} />
-                  {/* Keyed by session so switching runtimes starts a clean transcript. */}
-                  <ConsolePanel key={active ?? 'none'} sessionName={active} />
-                  {active && <SetupCard key={`setup-${active}`} sessionName={active} />}
-                  {active && <HistoryPanel key={`history-${active}`} sessionName={active} />}
-                </div>
-              )}
-
-              {tab === 'terminal' && <TerminalPanel key={active ?? 'none'} sessionName={active} />}
-
-              {tab === 'run' && (
-                <div className="space-y-6">
-                  <JobsPanel />
-                  <RunFilePanel key={active ?? 'none'} sessionName={active} />
-                </div>
-              )}
-
-              {tab === 'notebooks' && (
-                <NotebooksPanel
-                  canRun={Boolean(active)}
-                  runtimeName={active}
-                  onRun={setRunNotebook}
-                />
-              )}
-
-              {tab === 'files' && <FilesPanel key={active ?? 'none'} sessionName={active} />}
+                {tab === 'files' && <FilesPanel key={active ?? 'none'} sessionName={active} />}
+              </div>
             </>
           )}
 
