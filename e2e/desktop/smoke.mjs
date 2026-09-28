@@ -30,14 +30,15 @@ let exited = null
 child.on('exit', (code, signal) => (exited = { code, signal }))
 
 await new Promise((resolve) => setTimeout(resolve, 15_000))
+const crashed = exited
 if (!exited) child.kill()
 await new Promise((resolve) => setTimeout(resolve, 500))
 
 console.log('----- app output -----')
 console.log(output.trim() || '(nothing)')
 console.log('----------------------')
-if (exited) {
-  console.log(`The app exited during startup: ${JSON.stringify(exited)}`)
+if (crashed) {
+  console.log(`The app exited during startup: ${JSON.stringify(crashed)}`)
   process.exit(1)
 }
 console.log('The app stayed up for 15 s.')

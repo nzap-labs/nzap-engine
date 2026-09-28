@@ -69,6 +69,22 @@ function SettingsForm({ view }: { view: SettingsView }) {
               />
               Keep runtimes alive while NZAP Engine is open
             </label>
+            <label className="mt-3 flex items-center gap-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.closeToTray}
+                onChange={(event) =>
+                  save(
+                    { closeToTray: event.target.checked },
+                    event.target.checked
+                      ? 'Closing the window now keeps NZAP Engine in the system tray.'
+                      : 'Closing the window now quits NZAP Engine.',
+                  )
+                }
+                className="size-4 accent-[var(--color-ink)]"
+              />
+              Keep running in the system tray when the window is closed
+            </label>
             <form
               className="mt-4 flex flex-wrap items-end gap-2"
               onSubmit={(event) => {

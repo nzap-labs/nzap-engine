@@ -58,10 +58,12 @@
     "publisher": "NZAP Labs",
     "linux": {
       "deb": {
-        "section": "devel"
+        "section": "devel",
+        "depends": ["libayatana-appindicator3-1"]
       },
       "rpm": {
-        "release": "1"
+        "release": "1",
+        "depends": ["libayatana-appindicator-gtk3"]
       },
       "appimage": {
         "bundleMediaFramework": false

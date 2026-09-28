@@ -6,6 +6,7 @@
 
 mod commands;
 mod state;
+mod tray;
 
 use std::path::{Path, PathBuf};
 
@@ -25,6 +26,15 @@ fn dev_env(name: &str) -> Option<String> {
         std::env::var(name).ok().filter(|value| !value.is_empty())
     } else {
         None
+    }
+}
+
+/// Startup progress on stderr in debug builds, so a hang before the logger
+/// is useful still shows how far startup got.
+fn startup_mark(step: &str) {
+    if cfg!(debug_assertions) {
+        use std::io::Write as _;
+        let _ = writeln!(std::io::stderr(), "[nzap startup] {step}");
     }
 }
 
@@ -74,23 +84,34 @@ fn log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
 
 /// Build and run the application.
 pub fn run() {
+    startup_mark("building the app");
     let app = tauri::Builder::default()
         // Must be first: a second launch focuses the running window instead.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            tray::show_main(app);
         }))
         .plugin(log_plugin())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .on_window_event(tray::on_window_event)
+        .on_page_load(|webview, payload| {
+            startup_mark(&format!("page {:?}: {}", payload.event(), webview.url().map(|url| url.to_string()).unwrap_or_default()));
+        })
         .setup(|app| {
+            startup_mark("setup: building the engine");
             let state = build_state(app.handle())?;
+            startup_mark("setup: engine ready");
             let engine = state.engine.clone();
+            let close_to_tray = engine.settings.get().close_to_tray;
             app.manage(state);
+            if close_to_tray {
+                if let Err(error) = tray::ensure(app.handle()) {
+                    log::warn!("No system tray available: {error}");
+                }
+            }
             log::info!("NZAP Engine {} started", nzap_core::VERSION);
+            startup_mark("setup: done");
             // Reconnect to runtimes that survived the last session.
             tauri::async_runtime::spawn(async move { engine.resume().await });
             Ok(())
@@ -162,12 +183,18 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("NZAP Engine failed to start");
 
-    app.run(|handle, event| {
-        if let RunEvent::Exit = event {
+    startup_mark("running the event loop");
+    app.run(|handle, event| match event {
+        RunEvent::Ready => startup_mark("event loop ready"),
+        RunEvent::Exit => {
             if let Some(state) = handle.try_state::<AppState>() {
                 // Runtimes keep running on Google's side; only local work stops.
                 state.shutdown();
             }
         }
+        // macOS: clicking the Dock icon brings a hidden window back.
+        #[cfg(target_os = "macos")]
+        RunEvent::Reopen { .. } => tray::show_main(handle),
+        _ => {}
     });
 }
