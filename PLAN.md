@@ -170,8 +170,8 @@ quota | colab | runtime | io | internal`.
   loopback targets (SSRF guard) and bodies over 20 MB.
 - Every user value placed in generated Python is quoted as a Python string literal.
 - No telemetry and no analytics. Network egress goes only to Google and GitHub.
-- Release artefacts are signed where certificates are configured, and the updater
-  verifies minisign signatures.
+- Release artefacts are signed where certificates are configured. The updater,
+  once the maintainer enables it (`docs/RELEASING.md`), verifies minisign signatures.
 - Disclaimer: Colab's endpoints are internal APIs used by Google's own
   clients. They can change without notice, and the app is not affiliated with Google.
 

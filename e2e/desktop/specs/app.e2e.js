@@ -21,13 +21,38 @@ async function nextOpenedUrl(previous = 0) {
   return { url: urls.at(-1), count: urls.length }
 }
 
-async function waitForText(selector, text) {
-  const element = await $(selector)
-  await browser.waitUntil(async () => (await element.getText()).includes(text), {
-    timeout: 30_000,
-    timeoutMsg: `"${text}" never appeared in ${selector}`,
-  })
-  return element
+/**
+ * Wait until the element's rendered text contains `expected` (a string,
+ * compared case-insensitively because CSS may uppercase it, or a RegExp).
+ * The element is looked up again on every poll, so it may appear late.
+ */
+async function waitForText(selector, expected) {
+  let last = ''
+  await browser
+    .waitUntil(
+      async () => {
+        const element = await $(selector)
+        if (!(await element.isExisting())) return false
+        last = await element.getText()
+        return expected instanceof RegExp
+          ? expected.test(last)
+          : last.toLowerCase().includes(expected.toLowerCase())
+      },
+      {
+        timeout: 30_000,
+        timeoutMsg: `${expected} never appeared in ${selector}`,
+      },
+    )
+    .catch((error) => {
+      throw new Error(`${error.message}; last text: ${JSON.stringify(last.slice(0, 500))}`)
+    })
+}
+
+/** A button inside a container, matched by its (partial) text. */
+async function buttonIn(container, text) {
+  const button = await (await $(container)).$(`button*=${text}`)
+  await button.waitForClickable()
+  return button
 }
 
 async function openTab(name) {
@@ -101,7 +126,7 @@ describe('NZAP Engine (real engine, mock Google)', () => {
     await waitForText('section[aria-label="Terminal"] .xterm-rows', 'root@mock:/content#')
     await terminal.click()
     await browser.keys(['w', 'h', 'o', 'a', 'm', 'i', 'Enter'])
-    await waitForText('section[aria-label="Terminal"] .xterm-rows', 'root\n')
+    await waitForText('section[aria-label="Terminal"] .xterm-rows', /whoami\s+root\b/)
   })
 
   it('browses the runtime files', async () => {
@@ -111,12 +136,13 @@ describe('NZAP Engine (real engine, mock Google)', () => {
 
   it('releases the runtime and disconnects', async () => {
     await openTab('Runtimes')
-    await (await $('section[aria-label="Runtimes"] button*=Stop')).click()
-    await (await $('div[role="dialog"] button*=Stop and release')).click()
+    await (await buttonIn('section[aria-label="Runtimes"]', 'Stop')).click()
+    await (await buttonIn('div[role="dialog"]', 'Stop and release')).click()
     await waitForText('section[aria-label="Runtimes"]', 'No runtimes yet')
 
-    await (await $('section[aria-label="Google Auth"] button*=Disconnect')).click()
-    await (await $('div[role="dialog"] button=Disconnect')).click()
+    await (await buttonIn('section[aria-label="Google Auth"]', 'Disconnect')).click()
+    const dialog = await $('div[role="dialog"]')
+    await (await dialog.$('button=Disconnect')).click()
     await waitForText('section[aria-label="Google Auth"]', 'not connected')
   })
 })
