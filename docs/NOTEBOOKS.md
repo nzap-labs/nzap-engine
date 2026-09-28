@@ -3,10 +3,10 @@
 NZAP Engine has two kinds of notebooks. Both run on your Colab runtime, never
 on your computer.
 
-| Kind         | Where it lives                                                                         | Editable                |
-| ------------ | -------------------------------------------------------------------------------------- | ----------------------- |
-| **Public**   | [`nzap-labs/nzap-notebooks`](https://github.com/nzap-labs/nzap-notebooks) on GitHub      | Fork it to a local copy |
-| **Your own** | `notebooks/` in the app's data directory, one JSON file each                           | Yes                     |
+| Kind         | Where it lives                                                                      | Editable                |
+| ------------ | ----------------------------------------------------------------------------------- | ----------------------- |
+| **Public**   | [`nzap-labs/nzap-notebooks`](https://github.com/nzap-labs/nzap-notebooks) on GitHub | Fork it to a local copy |
+| **Your own** | `notebooks/` in the app's data directory, one JSON file each                        | Yes                     |
 
 ## Parameters
 
@@ -23,14 +23,14 @@ del _nzap_json
 Your code reads `params["key"]`. Values arrive as real Python types (`True`,
 `42`, `3.5`, strings), because they go through JSON.
 
-| `type`    | Input in the app     | Python value      |
-| --------- | -------------------- | ----------------- |
-| `string`  | one-line text        | `str`             |
-| `text`    | multi-line text      | `str`             |
-| `integer` | number, whole        | `int`             |
-| `number`  | number               | `float` / `int`   |
-| `boolean` | checkbox             | `bool`            |
-| `select`  | dropdown (`options`) | `str`             |
+| `type`    | Input in the app     | Python value    |
+| --------- | -------------------- | --------------- |
+| `string`  | one-line text        | `str`           |
+| `text`    | multi-line text      | `str`           |
+| `integer` | number, whole        | `int`           |
+| `number`  | number               | `float` / `int` |
+| `boolean` | checkbox             | `bool`          |
+| `select`  | dropdown (`options`) | `str`           |
 
 Each parameter has a `key` (a Python identifier), a `label`, and optionally
 `default`, `required` and `description`.

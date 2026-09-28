@@ -67,23 +67,31 @@ jobs:
       - run: npm run build
 
       - name: clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: test
-        run: cargo test --workspace
-
-      - name: Upload the resolved Cargo.lock
-        if: runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: cargo-lock
-          path: Cargo.lock
-          retention-days: 7
+        run: cargo test --workspace --locked
 
       # Last, so one run reports compile, lint and test results before style.
       - name: rustfmt
         if: always()
         run: cargo fmt --all --check
+
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: npm audit (everything the app ships)
+        run: npm audit --omit=dev --audit-level=moderate
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: cargo audit (RustSec advisories)
+        run: cargo audit
 
   web-e2e:
     name: web e2e (chromium + webkit)
@@ -134,7 +142,7 @@ jobs:
       - name: Build the app (debug, dev overrides on) and the mock
         run: |
           npx tauri build --debug --no-bundle
-          cargo build -p nzap-mock-colab --bin mock-colab
+          cargo build --locked -p nzap-mock-colab --bin mock-colab
 
       - name: Install tauri-driver
         run: cargo install tauri-driver --locked

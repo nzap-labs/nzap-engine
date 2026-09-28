@@ -203,7 +203,14 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    let tmp = path.with_extension("tmp");
+    // A unique temporary name per write: concurrent writers never share (and
+    // rename away) each other's half-written file, and readers only ever see
+    // a complete one.
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let serial = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let mut tmp_name = path.file_name().unwrap_or_default().to_os_string();
+    tmp_name.push(format!(".{}.{serial}.tmp", std::process::id()));
+    let tmp = path.with_file_name(tmp_name);
     {
         let mut options = fs::OpenOptions::new();
         options.write(true).create(true).truncate(true);
@@ -216,7 +223,9 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> Result<()> {
         file.write_all(bytes)?;
         file.sync_all()?;
     }
-    fs::rename(&tmp, path)?;
+    fs::rename(&tmp, path).inspect_err(|_| {
+        let _ = fs::remove_file(&tmp);
+    })?;
     Ok(())
 }
 
@@ -249,6 +258,34 @@ mod tests {
         assert_eq!(store.kind(), StorageKind::File);
         store.delete("b").unwrap();
         assert!(!path.exists(), "an empty store removes its file");
+    }
+
+    #[test]
+    fn concurrent_writes_leave_a_complete_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("sessions.json");
+        let contents: Vec<String> =
+            (0..8).map(|n| format!("{{\"writer\":{n}}}").repeat(500)).collect();
+        std::thread::scope(|scope| {
+            for body in &contents {
+                let path = &path;
+                scope.spawn(move || {
+                    for _ in 0..25 {
+                        // Windows may refuse a rename that races another; the
+                        // file must still be complete afterwards.
+                        let _ = write_private(path, body.as_bytes());
+                    }
+                });
+            }
+        });
+        let written = fs::read_to_string(&path).unwrap();
+        assert!(contents.contains(&written), "the file holds one writer's full contents");
+        let leftovers: Vec<_> = fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(|entry| entry.ok())
+            .filter(|entry| entry.file_name().to_string_lossy().ends_with(".tmp"))
+            .collect();
+        assert!(leftovers.is_empty(), "no temporary files are left behind");
     }
 
     #[cfg(unix)]

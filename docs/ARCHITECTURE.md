@@ -72,7 +72,7 @@ outgoing requests.
    the same channel. Every execution is appended to the runtime's history.
 4. **Keep alive**: while the app runs, it pings each runtime at the configured
    interval (30–600 s), for at most 24 hours per runtime.
-5. **Stop**: the engine releases the assignment. Closing the app does *not*
+5. **Stop**: the engine releases the assignment. Closing the app does _not_
    release runtimes. On the next launch the app lists them again and reconnects.
 
 ## The simulated engine

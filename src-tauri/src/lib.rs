@@ -82,6 +82,28 @@ fn log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
         .build()
 }
 
+/// The compiled configuration, adjusted for WebDriver runs.
+fn context() -> tauri::Context<tauri::Wry> {
+    #[allow(unused_mut)]
+    let mut context = tauri::generate_context!();
+    // msedgedriver hands WebView2 its remote-debugging flags through
+    // WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS, which the browser arguments wry
+    // sets explicitly can shadow. Merge them in debug builds so the desktop
+    // E2E suite can attach.
+    #[cfg(all(windows, debug_assertions))]
+    {
+        if let Some(extra) = dev_env("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS") {
+            startup_mark(&format!("WebView2 arguments from the environment: {extra}"));
+            for window in &mut context.config_mut().app.windows {
+                window.additional_browser_args = Some(format!(
+                    "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection {extra}"
+                ));
+            }
+        }
+    }
+    context
+}
+
 /// Build and run the application.
 pub fn run() {
     startup_mark("building the app");
@@ -96,7 +118,11 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .on_window_event(tray::on_window_event)
         .on_page_load(|webview, payload| {
-            startup_mark(&format!("page {:?}: {}", payload.event(), webview.url().map(|url| url.to_string()).unwrap_or_default()));
+            startup_mark(&format!(
+                "page {:?}: {}",
+                payload.event(),
+                webview.url().map(|url| url.to_string()).unwrap_or_default()
+            ));
         })
         .setup(|app| {
             startup_mark("setup: building the engine");
@@ -180,7 +206,7 @@ pub fn run() {
             commands::notebooks::notebook_import,
             commands::notebooks::notebook_run,
         ])
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("NZAP Engine failed to start");
 
     startup_mark("running the event loop");
