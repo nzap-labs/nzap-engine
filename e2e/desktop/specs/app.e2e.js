@@ -25,15 +25,20 @@ async function nextOpenedUrl(previous = 0) {
  * Wait until the element's rendered text contains `expected` (a string,
  * compared case-insensitively because CSS may uppercase it, or a RegExp).
  * The element is looked up again on every poll, so it may appear late.
+ * Reads `innerText` in the page: WebKitWebDriver's getText drops some
+ * visible rows and joins block elements without line breaks.
  */
 async function waitForText(selector, expected) {
   let last = ''
   await browser
     .waitUntil(
       async () => {
-        const element = await $(selector)
-        if (!(await element.isExisting())) return false
-        last = await element.getText()
+        const text = await browser.execute(
+          (css) => document.querySelector(css)?.innerText ?? null,
+          selector,
+        )
+        if (text === null) return false
+        last = text
         return expected instanceof RegExp
           ? expected.test(last)
           : last.toLowerCase().includes(expected.toLowerCase())
@@ -126,7 +131,7 @@ describe('NZAP Engine (real engine, mock Google)', () => {
     await waitForText('section[aria-label="Terminal"] .xterm-rows', 'root@mock:/content#')
     await terminal.click()
     await browser.keys(['w', 'h', 'o', 'a', 'm', 'i', 'Enter'])
-    await waitForText('section[aria-label="Terminal"] .xterm-rows', /whoami\s+root\b/)
+    await waitForText('section[aria-label="Terminal"] .xterm-rows', /whoami\s+root\s/)
   })
 
   it('browses the runtime files', async () => {
