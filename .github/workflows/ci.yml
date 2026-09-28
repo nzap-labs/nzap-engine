@@ -72,6 +72,14 @@ jobs:
       - name: test
         run: cargo test --workspace
 
+      - name: Upload the resolved Cargo.lock
+        if: runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock
+          path: Cargo.lock
+          retention-days: 7
+
       # Last, so one run reports compile, lint and test results before style.
       - name: rustfmt
         if: always()
@@ -143,6 +151,14 @@ jobs:
         working-directory: e2e/desktop
         run: npm ci
 
+      - name: Smoke-launch the app (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum node e2e/desktop/smoke.mjs
+
+      - name: Smoke-launch the app (Windows)
+        if: runner.os == 'Windows'
+        run: node e2e/desktop/smoke.mjs
+
       - name: Run (Linux)
         if: runner.os == 'Linux'
         working-directory: e2e/desktop
@@ -152,3 +168,19 @@ jobs:
         if: runner.os == 'Windows'
         working-directory: e2e/desktop
         run: npm test
+
+      - name: Collect the app logs
+        if: failure()
+        shell: bash
+        run: |
+          mkdir -p e2e/desktop/artifacts/logs
+          for dir in "$HOME/.local/share/com.nzaplabs.engine/logs" "$LOCALAPPDATA/com.nzaplabs.engine/logs"; do
+            [ -d "$dir" ] && cp -r "$dir"/. e2e/desktop/artifacts/logs/ || true
+          done
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: desktop-e2e-${{ matrix.os }}
+          path: e2e/desktop/artifacts
+          retention-days: 7

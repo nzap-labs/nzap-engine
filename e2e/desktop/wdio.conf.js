@@ -66,6 +66,27 @@ export const config = {
     })
   },
 
+  // On failure, record what the webview actually shows.
+  afterTest: async (test, _context, { passed }) => {
+    if (passed) return
+    const dir = path.join(import.meta.dirname, 'artifacts')
+    fs.mkdirSync(dir, { recursive: true })
+    const name = test.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()
+    try {
+      const page = await browser.execute(() => ({
+        url: location.href,
+        title: document.title,
+        readyState: document.readyState,
+        tauri: '__TAURI_INTERNALS__' in window,
+        text: document.body?.innerText.slice(0, 1500) ?? '(no body)',
+      }))
+      console.log(`[diagnostics] ${test.title}: ${JSON.stringify(page, null, 2)}`)
+      await browser.saveScreenshot(path.join(dir, `${name}.png`))
+    } catch (error) {
+      console.log(`[diagnostics] ${test.title}: could not inspect the page: ${error}`)
+    }
+  },
+
   afterSession: () => {
     tauriDriver?.kill()
   },
