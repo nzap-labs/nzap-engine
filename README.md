@@ -8,9 +8,17 @@ you a console, a real terminal, a file manager, parameterised notebooks and
 ephemeral jobs. There is no server, no NZAP account and no database: install one
 package and connect Google.
 
-> **Status: early development.** The build is proceeding in phases. See
-> [PLAN.md](./PLAN.md) for the architecture, the feature-parity map and
-> progress. Nothing is released yet.
+> **Status: pre-release.** Every feature is built and tested against a mock
+> of Google's services on Windows, macOS and Linux. The first release follows
+> a pass of the [live checklist](./docs/TESTING.md#live-verification-checklist)
+> against real Colab. [PLAN.md](./PLAN.md) has the design and the history.
+
+## Install
+
+Download the installer for Windows, macOS or Linux from
+[Releases](https://github.com/nzap-labs/nzap-engine/releases), open it, and
+click **Connect Google**. [docs/INSTALL.md](./docs/INSTALL.md) covers each OS
+and unsigned-build warnings.
 
 ## What it does
 
@@ -47,6 +55,19 @@ NZAP Engine (one process)
 The engine is a Rust port of `colab-studio`, which speaks the same wire protocol
 as Google's own `google-colab-cli` and the Colab VS Code extension.
 
+## Documentation
+
+| Guide                                           | For                                             |
+| ----------------------------------------------- | ----------------------------------------------- |
+| [INSTALL.md](./docs/INSTALL.md)                 | installing, where data lives, uninstalling      |
+| [OAUTH.md](./docs/OAUTH.md)                     | how sign-in works, using your own OAuth client  |
+| [NOTEBOOKS.md](./docs/NOTEBOOKS.md)             | parameters, writing and contributing notebooks  |
+| [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | common problems                                 |
+| [ARCHITECTURE.md](./docs/ARCHITECTURE.md)       | how the pieces fit, IPC conventions             |
+| [TESTING.md](./docs/TESTING.md)                 | the test suites and the live checklist          |
+| [RELEASING.md](./docs/RELEASING.md)             | cutting releases, signing, enabling auto-update |
+| [SECURITY.md](./SECURITY.md)                    | threat model and reporting vulnerabilities      |
+
 ## Development
 
 Prerequisites: Node 22+, the Rust stable toolchain, and the
@@ -63,13 +84,15 @@ UI talks to `src/dev/fake-engine.ts`, which imitates the engine (including a
 Colab kernel, a terminal and Drive consent), and `window.__NZAP_FAKE__` lets you
 change its state. Production builds never include it.
 
-| Command                                              | What it does                      |
-| ---------------------------------------------------- | --------------------------------- |
-| `npm run lint` / `typecheck` / `test`                | frontend checks and unit tests    |
-| `npm run build`                                      | production frontend bundle        |
-| `npm run app:build`                                  | installers for the current OS     |
-| `cargo test --workspace`                             | engine unit and integration tests |
-| `cargo clippy --workspace --all-targets -D warnings` | Rust lints                        |
+| Command                                                 | What it does                        |
+| ------------------------------------------------------- | ----------------------------------- |
+| `npm run lint` / `typecheck` / `test`                   | frontend checks and component tests |
+| `npx playwright test`                                   | web E2E (Chromium + WebKit)         |
+| `npm run build`                                         | production frontend bundle          |
+| `npm run app:build`                                     | installers for the current OS       |
+| `cargo test --workspace`                                | engine unit and integration tests   |
+| `cargo clippy --workspace --all-targets -- -D warnings` | Rust lints                          |
+| see [`e2e/desktop`](./e2e/desktop/README.md)            | desktop E2E against the real app    |
 
 Layout: `src/` (React UI), `src-tauri/` (desktop shell), `crates/nzap-core`
 (the engine), `crates/nzap-mock-colab` (mock Google services for tests), `e2e/`.

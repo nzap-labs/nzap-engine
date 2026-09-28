@@ -35,7 +35,10 @@ NZAP Engine acts with the Google account you connect. The assets it guards are:
   the SHA-256 digests in the catalog. They run on your Colab VM, never on your
   machine, and you can read the source before running one.
 - **No telemetry.** Network traffic goes only to Google (accounts, Colab, Drive,
-  your runtimes) and GitHub (the notebook catalog and update checks).
+  your runtimes) and GitHub (the notebook catalog).
+- **Supply chain.** `Cargo.lock` and `package-lock.json` are committed and CI
+  builds with `--locked`. Every push runs `cargo audit` (RustSec) and
+  `npm audit` on the shipped dependencies.
 
 ## Known limits
 

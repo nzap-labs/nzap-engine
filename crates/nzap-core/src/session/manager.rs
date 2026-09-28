@@ -59,6 +59,8 @@ struct Inner {
     keepalive_enabled: AtomicBool,
     keepalive_interval: Mutex<Duration>,
     pending_colab: Mutex<HashMap<String, PendingColab>>,
+    /// Serializes writes of the sessions file.
+    save_lock: Mutex<()>,
 }
 
 /// One entry of a directory listing.
@@ -170,6 +172,7 @@ impl SessionManager {
                 keepalive_enabled: AtomicBool::new(true),
                 keepalive_interval: Mutex::new(KEEP_ALIVE_INTERVAL),
                 pending_colab: Mutex::new(HashMap::new()),
+                save_lock: Mutex::new(()),
             }),
         }
     }
@@ -204,6 +207,8 @@ impl SessionManager {
     // ---------------------------------------------------------- persistence
 
     fn save(&self) {
+        // Snapshot and write under one lock, so the newest state always lands last.
+        let _saving = lock(&self.inner.save_lock);
         let payload = {
             let sessions = lock(&self.inner.sessions);
             json!({ "sessions": sessions.values().collect::<Vec<_>>() })

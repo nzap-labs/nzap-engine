@@ -114,10 +114,20 @@ pub fn settings_get(state: State<'_, AppState>) -> SettingsView {
 
 #[tauri::command]
 pub fn settings_update(
+    app: AppHandle,
     state: State<'_, AppState>,
     patch: SettingsPatch,
 ) -> CmdResult<SettingsView> {
+    let tray_change = patch.close_to_tray;
     state.engine.update_settings(patch)?;
+    // Sync command, so this runs on the main thread as tray APIs require.
+    match tray_change {
+        Some(true) => crate::tray::ensure(&app).map_err(|error| {
+            Error::internal(format!("The system tray is not available: {error}"))
+        })?,
+        Some(false) => crate::tray::remove(&app),
+        None => {}
+    }
     Ok(settings_view(&state))
 }
 

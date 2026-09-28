@@ -156,9 +156,19 @@ function fail(code: string, message: string): never {
 
 const now = () => Date.now() / 1000
 
+/** Test presets set before the page loads (`sessionStorage['nzap-fake-preset']`). */
+function preset(): Partial<FakeState> {
+  try {
+    const raw = sessionStorage.getItem('nzap-fake-preset')
+    return raw ? (JSON.parse(raw) as Partial<FakeState>) : {}
+  } catch {
+    return {}
+  }
+}
+
 export function installFakeEngine(): FakeControls {
   const controls: FakeControls = {
-    state: initialState(),
+    state: { ...initialState(), ...preset() },
     reset(overrides = {}) {
       controls.state = { ...initialState(), ...overrides }
     },

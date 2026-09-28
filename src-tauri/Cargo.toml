@@ -26,7 +26,7 @@ nzap-core.workspace = true
 percent-encoding = "2"
 serde.workspace = true
 serde_json.workspace = true
-tauri = { version = "2.12", features = [] }
+tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"

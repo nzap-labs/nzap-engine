@@ -235,7 +235,12 @@ function RemoteConnectDialog() {
               autoComplete="off"
               spellCheck={false}
             />
-            <Button type="submit" disabled={!code.trim() || complete.isPending || !begin.isSuccess}>
+            <Button
+              type="submit"
+              disabled={!code.trim() || complete.isPending || !begin.isSuccess}
+              aria-label="Connect"
+              aria-busy={complete.isPending}
+            >
               {complete.isPending ? <Loader2 className="size-4 animate-spin" /> : 'Connect'}
             </Button>
           </form>
