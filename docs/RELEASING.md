@@ -41,41 +41,48 @@ Azure Trusted Signing. Configure it in `bundle.windows` following
 [Tauri's Windows signing guide](https://v2.tauri.app/distribute/sign/windows/),
 and add the secrets to the release workflow.
 
-## Auto-update (not enabled yet)
+## Auto-update
 
-The Tauri updater verifies every update against a public key compiled into the
-app. Only the maintainer should hold the private key, so it is not generated
-here. To turn updates on:
+NZAP Engine updates itself (**Settings → Updates**, and a check a few
+seconds after launch). The updater plugin downloads `latest.json` from the
+first reachable endpoint in `src-tauri/tauri.conf.json`:
 
-1. Generate the key pair once, on a trusted machine, and keep the private key
-   and its password safe. Losing it means users must reinstall by hand.
-   ```bash
-   npx tauri signer generate -w ~/.tauri/nzap-engine.key
-   ```
-2. Add the repository secrets `TAURI_SIGNING_PRIVATE_KEY` (the file contents)
-   and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and pass both as `env` to the
-   `tauri-action` step in `release.yml`.
-3. Add the plugin: `tauri-plugin-updater` in `src-tauri/Cargo.toml`,
-   `.plugin(tauri_plugin_updater::Builder::new().build())` in
-   `src-tauri/src/lib.rs`, and `"updater:default"` in
-   `src-tauri/capabilities/default.json`.
-4. In `src-tauri/tauri.conf.json`, set `bundle.createUpdaterArtifacts` to
-   `true` and add:
-   ```json
-   "plugins": {
-     "updater": {
-       "pubkey": "<contents of nzap-engine.key.pub>",
-       "endpoints": [
-         "https://github.com/nzap-labs/nzap-engine/releases/latest/download/latest.json"
-       ]
-     }
-   }
-   ```
-5. Set `updaterJsonPreferNsis: true` on the `tauri-action` step so Windows
-   updates use the per-user installer. The action then uploads `latest.json`
-   with each release.
-6. Add an update check to the UI (Settings → About), using
-   `@tauri-apps/plugin-updater`.
+1. `nzap-labs/nzap-engine-releases` — a public, releases-only repository, the
+   feed while this repository is private;
+2. `nzap-labs/nzap-engine` — the feed once this repository is public.
+
+Every bundle is verified against the public key in `plugins.updater.pubkey`
+before it installs. The private key lives only with the maintainer
+(`~/.tauri/nzap-engine.key` on the machine that generated it, with its
+password beside it). **Back both up**: without them no installed copy can
+ever be updated again, and users would have to reinstall by hand.
+
+### One-time setup
+
+1. Repository secrets (Settings → Secrets and variables → Actions):
+
+   | Secret                               | Value                                      |
+   | ------------------------------------ | ------------------------------------------ |
+   | `TAURI_SIGNING_PRIVATE_KEY`          | the contents of `~/.tauri/nzap-engine.key` |
+   | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | the contents of `nzap-engine.key.password` |
+
+   With them, `release.yml` builds with `src-tauri/tauri.updater.conf.json`
+   (`createUpdaterArtifacts`), signs the bundles and uploads `latest.json`.
+   Without them, releases still build; they just cannot update installed apps.
+
+2. While this repository is private: create the **public** repository
+   `nzap-labs/nzap-engine-releases` (with a README so it has a default
+   branch), then add
+   - the variable `RELEASES_REPO` = `nzap-labs/nzap-engine-releases`;
+   - the secret `RELEASES_TOKEN`: a fine-grained token with **Contents: read
+     and write** on that repository only.
+
+   Tagged releases are then published there. When this repository goes
+   public, delete the variable: releases (and `latest.json`) land here, which
+   is the second endpoint every installed copy already checks.
+
+Windows installs updates with the NSIS installer in passive mode (a progress
+window, no questions); macOS and Linux replace the app and relaunch it.
 
 ## Dependencies
 

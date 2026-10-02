@@ -15,6 +15,7 @@ import {
 import { ExternalLink } from '@/components/external-link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { UpdatesCard } from '@/features/updates/updates-card'
 import { PageHeader } from '@/features/shell/page-header'
 import { errorMessage } from '@/lib/ipc'
 
@@ -56,6 +57,8 @@ function SettingsForm({ view }: { view: SettingsView }) {
       <PageHeader title="Settings" />
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 pb-10 md:px-6">
         <div className="mx-auto w-full max-w-3xl space-y-6">
+          <UpdatesCard />
+
           <Card
             title="Keep-alive"
             description="Ping every runtime so Colab does not stop it for being idle (for at most 24 hours, like the Colab CLI)."

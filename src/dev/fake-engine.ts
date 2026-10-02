@@ -89,6 +89,10 @@ export interface FakeState {
   /** Commands invoked, in order (for assertions). */
   calls: string[]
   saved: { filename: string; content: string }[]
+  /** What the update feed offers (`plugin:updater|check`); null = up to date. */
+  update: { version: string; body: string; date: string } | null
+  /** Set when the app asked to relaunch after installing an update. */
+  restarted: boolean
 }
 
 export interface FakeControls {
@@ -151,6 +155,8 @@ function initialState(): FakeState {
     opened: [],
     calls: [],
     saved: [],
+    update: null,
+    restarted: false,
   }
 }
 
@@ -554,6 +560,35 @@ export function installFakeEngine(): FakeControls {
         return null
       case 'reveal_path':
       case 'open_log_dir':
+        return null
+      // -- updater + process plugins
+      case 'plugin:updater|check':
+        await sleep()
+        return s().update
+          ? {
+              rid: 1,
+              currentVersion: '0.1.0',
+              version: s().update!.version,
+              date: s().update!.date,
+              body: s().update!.body,
+              rawJson: {},
+            }
+          : null
+      case 'plugin:updater|download_and_install': {
+        const emit = emitter(args.onEvent)
+        const total = 12 * 1024 * 1024
+        emit({ event: 'Started', data: { contentLength: total } })
+        for (let chunk = 0; chunk < 6; chunk += 1) {
+          await sleep()
+          emit({ event: 'Progress', data: { chunkLength: total / 6 } })
+        }
+        emit({ event: 'Finished' })
+        return null
+      }
+      case 'plugin:process|restart':
+        s().restarted = true
+        return null
+      case 'plugin:resources|close':
         return null
       case 'stream_cancel': {
         const cancel = cancels.get(String(args.streamId))

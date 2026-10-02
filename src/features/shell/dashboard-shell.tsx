@@ -2,6 +2,7 @@ import { createContext, useContext, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Outlet } from '@tanstack/react-router'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { StartupUpdateCheck } from '@/features/updates/startup-check'
 import { Sidebar } from './sidebar'
 import { cn } from '@/lib/cn'
 
@@ -57,6 +58,7 @@ export function DashboardShell() {
             </aside>
           </div>
           <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <StartupUpdateCheck />
             <Outlet />
           </main>
         </div>

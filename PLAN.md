@@ -297,6 +297,14 @@ Each phase ends green in CI and with a commit and push to `main`.
 - [x] Monochrome chrome palette: ink accent inverted per theme, brushed-metal primary actions, chrome display type; mint/coral kept for status
 - [x] `brand/build_brand.py` rebuilds every asset (icon, marks, wordmark masks, social card) from the two source logos
 
+### Phase 12 — Updates & first release
+
+- [x] Updater + process plugins, signing key generated (private key with the maintainer), feed: public releases repository first, this repository once public
+- [x] Settings → Updates (check, notes, download progress, install and relaunch) and a quiet check after launch
+- [x] `release.yml`: signed updater bundles + `latest.json` when the key secret exists, optional publishing to the public releases repository, Linux-only build-only runs on branches
+- [x] `lockfile.yml`: Cargo.lock for dependency changes without a local Rust toolchain
+- [ ] v0.1.0 tagged and published (needs the secrets above to ship an update feed)
+
 ## 10. Risks & open items
 
 | Risk                                                                                                                 | Mitigation                                                                                                                       |
