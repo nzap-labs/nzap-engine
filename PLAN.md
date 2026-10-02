@@ -305,6 +305,11 @@ Each phase ends green in CI and with a commit and push to `main`.
 - [x] `lockfile.yml`: Cargo.lock for dependency changes without a local Rust toolchain
 - [ ] v0.1.0 tagged and published (needs the secrets above to ship an update feed)
 
+### Phase 13 — Website links
+
+- [x] `nzap://` deep links (`apps/<id>`, `app/<slug>`, `apps`) open apps from the website; strict parsing, navigation only; single-instance forwards links to the running app
+- [x] Website (`nzap-labs/nzap-website`): live app gallery with "Open in NZAP Engine", the launch film and homepage clip rendered in CI
+
 ## 10. Risks & open items
 
 | Risk                                                                                                                 | Mitigation                                                                                                                       |
