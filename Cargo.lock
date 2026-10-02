@@ -2683,7 +2683,7 @@ dependencies = [
  "keyring",
  "nzap-mock-colab",
  "percent-encoding",
- "rand 0.8.8",
+ "rand 0.10.3",
  "reqwest 0.12.28",
  "rustls",
  "serde",
