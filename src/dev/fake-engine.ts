@@ -41,7 +41,16 @@ interface FakeSession {
   connected: boolean
   kernelState: string | null
   count: number
-  files: Map<string, { dir: boolean; content: string }>
+  files: Map<string, FakeFile>
+  /** App slugs whose model is loaded in this kernel. */
+  warmApps: Set<string>
+}
+
+interface FakeFile {
+  dir: boolean
+  content: string
+  /** Binary files keep base64 content, like Jupyter's contents API. */
+  format?: 'base64'
 }
 
 interface FakeNotebook {
@@ -57,6 +66,7 @@ interface FakeNotebook {
   createdAt: string | null
   updatedAt: string | null
   forkedFrom: string | null
+  app?: Json
 }
 
 export interface FakeState {
@@ -115,6 +125,7 @@ function publicNotebooks(): FakeNotebook[] {
     createdAt: null,
     updatedAt: null,
     forkedFrom: null,
+    ...(entry.app ? { app: entry.app as Json } : {}),
   }))
 }
 
@@ -248,7 +259,7 @@ export function installFakeEngine(): FakeControls {
 
   function newSession(name: string, gpu?: string, tpu?: string, highMem?: boolean): FakeSession {
     const accelerator = tpu ? tpu.toUpperCase() : gpu ? gpu.toUpperCase() : 'CPU'
-    const files = new Map<string, { dir: boolean; content: string }>([
+    const files = new Map<string, FakeFile>([
       ['content', { dir: true, content: '' }],
       ['content/sample_data', { dir: true, content: '' }],
       ['content/sample_data/README.md', { dir: false, content: 'Sample datasets.\n' }],
@@ -269,6 +280,7 @@ export function installFakeEngine(): FakeControls {
       kernelState: null,
       count: 0,
       files,
+      warmApps: new Set(),
     }
   }
 
@@ -447,6 +459,7 @@ export function installFakeEngine(): FakeControls {
       createdAt: notebook.createdAt,
       updatedAt: notebook.updatedAt,
       forkedFrom: notebook.forkedFrom,
+      ...(notebook.app ? { app: notebook.app } : {}),
     }
   }
 
@@ -485,6 +498,7 @@ export function installFakeEngine(): FakeControls {
       createdAt: existing?.createdAt ?? stamp,
       updatedAt: stamp,
       forkedFrom: (draft.forkedFrom as string | null | undefined) ?? existing?.forkedFrom ?? null,
+      app: (draft.app as Json | undefined) ?? existing?.app,
     }
     if (existing) Object.assign(existing, notebook)
     else s().notebooks.push(notebook)
@@ -700,6 +714,7 @@ export function installFakeEngine(): FakeControls {
         return { ok: true, at: target.lastKeepalive }
       }
       case 'session_restart': {
+        s().sessions.get(String(args.name))?.warmApps.clear()
         const target = session(args.name)
         target.connected = false
         target.count = 0
@@ -931,8 +946,9 @@ export function installFakeEngine(): FakeControls {
           name: String(args.path).split('/').pop(),
           path: args.path,
           type: 'file',
-          format: 'text',
+          format: file.format ?? 'text',
           content: file.content,
+          mimetype: file.format === 'base64' ? 'application/octet-stream' : 'text/plain',
         }
       }
       case 'files_write':
@@ -1035,6 +1051,7 @@ export function installFakeEngine(): FakeControls {
         const notebook = findNotebook(args.id)
         const target = session(args.session)
         const resolved = resolveParams(notebook.params, (args.params as Json) ?? {})
+        if (notebook.app) return runApp(target, notebook, resolved, emitter(args.onEvent), streamId)
         const code = `# Injected by NZAP Engine — do not edit.\nimport json as _nzap_json\nparams = _nzap_json.loads(${JSON.stringify(JSON.stringify(resolved))})\ndel _nzap_json\n\n${notebook.source}`
         return runCell(target, code, emitter(args.onEvent), streamId)
       }
@@ -1052,6 +1069,146 @@ export function installFakeEngine(): FakeControls {
       customOauthClient: Boolean(s().customClient),
       defaultCatalogUrl: DEFAULT_CATALOG,
     }
+  }
+
+  /**
+   * An NZAP app run: the stages a real app reports (install, load, run), a
+   * warm second run, and real output files (a synthesized WAV for audio
+   * apps) that the UI fetches with `files_read`, like on Colab.
+   */
+  async function runApp(
+    target: FakeSession,
+    notebook: FakeNotebook,
+    params: Json,
+    emit: Emit,
+    streamId?: string,
+  ): Promise<Json> {
+    const app = notebook.app as Json
+    const slug = notebook.slug
+    target.connected = true
+    target.kernelId ??= `kernel-${target.name}`
+    target.lastActivity = now()
+    target.count += 1
+    const count = target.count
+    const pace = s().delay / 120
+    const wait = (ms: number) => cancellable(streamId, sleep(ms * pace))
+    const event = (payload: Json, text: string) =>
+      emit({
+        type: 'display',
+        data: {
+          'application/vnd.nzap.app+json': { v: 1, app: slug, ...payload },
+          'text/plain': text,
+        },
+      })
+    const stage = (id: string, label: string, progress: number | null = null) =>
+      event({ event: 'stage', id, label, progress }, `[nzap] ${label}…`)
+
+    target.kernelState = 'busy'
+    emit({ type: 'status', state: 'busy' })
+    emit({ type: 'input', execution_count: count })
+    const started = Date.now()
+    const warm = target.warmApps.has(slug)
+    try {
+      if (!warm) {
+        stage('install', `Installing ${notebook.title.split(' (')[0]}`)
+        emit({ type: 'stream', name: 'stdout', text: 'Collecting packages…\n' })
+        await wait(1100)
+        stage('download', 'Downloading model weights')
+        await wait(900)
+        stage('load', 'Loading the model')
+        await wait(700)
+      }
+      const setup = (Date.now() - started) / 1000
+      event(
+        {
+          event: 'ready',
+          warm,
+          setupSeconds: setup,
+          device: target.accelerator === 'CPU' ? 'cpu' : `Tesla ${target.accelerator}`,
+        },
+        '[nzap] Model ready.',
+      )
+      target.warmApps.add(slug)
+
+      const runStarted = Date.now()
+      const outputs = (app.outputs as Json[] | undefined) ?? []
+      const text = String(params.text ?? '')
+      const paragraphs = text.split(/\n\s*\n/).filter((part) => part.trim())
+      for (let index = 0; index < Math.max(1, paragraphs.length); index += 1) {
+        stage(
+          'run',
+          paragraphs.length > 1
+            ? `Generating paragraph ${index + 1} of ${paragraphs.length}`
+            : 'Generating',
+          paragraphs.length > 1 ? index / paragraphs.length : null,
+        )
+        await wait(900 / Math.max(1, paragraphs.length))
+      }
+      const stamp = new Date().toISOString().replace(/\D/g, '').slice(0, 14)
+      for (const slot of outputs) {
+        const id = String(slot.id)
+        if (slot.kind === 'audio') {
+          const audio = synthesizeSpeech(text || notebook.title)
+          const path = `content/nzap/outputs/${slug}/${stamp}.wav`
+          writeFile(target, path, audio.base64)
+          target.files.get(path)!.format = 'base64'
+          event(
+            {
+              event: 'output',
+              id,
+              kind: 'audio',
+              path: `/${path}`,
+              mime: 'audio/wav',
+              meta: { duration: audio.duration, sampleRate: 24000, segments: audio.segments },
+            },
+            `[nzap] Saved /${path}`,
+          )
+        } else if (slot.kind === 'table') {
+          const rows = text
+            .split('\n')
+            .filter((line) => line.trim())
+            .map((line) => {
+              const negative = /\b(not|died|bad|waste|worst|broke|hate|no)\b/i.test(line)
+              return [line.trim(), negative ? 'Negative' : 'Positive', negative ? 0.9871 : 0.9993]
+            })
+          event(
+            {
+              event: 'output',
+              id,
+              kind: 'table',
+              columns: ['Text', 'Sentiment', 'Confidence'],
+              rows,
+            },
+            `[nzap] Scored ${rows.length} lines.`,
+          )
+        } else if (slot.kind === 'image') {
+          const path = `content/nzap/outputs/${slug}/${stamp}.png`
+          writeFile(target, path, SAMPLE_PNG)
+          target.files.get(path)!.format = 'base64'
+          event(
+            { event: 'output', id, kind: 'image', path: `/${path}`, mime: 'image/png' },
+            `[nzap] Saved /${path}`,
+          )
+        } else {
+          event({ event: 'output', id, kind: 'text', text }, text)
+        }
+      }
+      event(
+        {
+          event: 'done',
+          warm,
+          seconds: { setup, run: (Date.now() - runStarted) / 1000 },
+        },
+        '[nzap] Done.',
+      )
+    } finally {
+      target.kernelState = 'idle'
+    }
+    const reply = { type: 'execute_reply', status: 'ok', execution_count: count }
+    emit({ type: 'status', state: 'idle' })
+    emit(reply)
+    log(target.name, 'automation', { op: 'notebook', notebook: notebook.id, title: notebook.title })
+    return reply
   }
 
   function writeFile(target: FakeSession, path: string, content: string) {
@@ -1196,6 +1353,85 @@ export function installFakeEngine(): FakeControls {
     handle(cmd, (args ?? {}) as Json, options)
   console.info('[nzap] Running against the simulated engine (window.__NZAP_FAKE__).')
   return controls
+}
+
+/**
+ * A WAV that looks and sounds like speech: voiced syllables with formants,
+ * word gaps and pauses between paragraphs, seeded by the text so the same
+ * input gives the same clip. Returns base64, the duration, and per-paragraph
+ * segments like the real TTS apps report.
+ */
+function synthesizeSpeech(text: string) {
+  const rate = 24_000
+  let seed = 7
+  for (const char of text) seed = (seed * 31 + char.charCodeAt(0)) % 2_147_483_647
+  const random = () => {
+    seed = (seed * 48_271) % 2_147_483_647
+    return seed / 2_147_483_647
+  }
+  const paragraphs = text
+    .split(/\n\s*\n/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+  const samples: number[] = []
+  const segments: { start: number; end: number; text: string }[] = []
+  for (const paragraph of paragraphs.length ? paragraphs : ['…']) {
+    const start = samples.length / rate
+    for (const word of paragraph.split(/\s+/).slice(0, 60)) {
+      const syllables = Math.max(1, Math.round(word.length / 3))
+      for (let syllable = 0; syllable < syllables; syllable += 1) {
+        const length = Math.floor(rate * (0.12 + random() * 0.1))
+        const pitch = 105 + random() * 70
+        const formant = 500 + random() * 1400
+        for (let index = 0; index < length; index += 1) {
+          const t = index / rate
+          const envelope = Math.sin((Math.PI * index) / length) ** 1.5
+          const voiced =
+            Math.sin(2 * Math.PI * pitch * t) * 0.55 +
+            Math.sin(2 * Math.PI * pitch * 2 * t) * 0.25 +
+            Math.sin(2 * Math.PI * formant * t) * 0.12
+          samples.push(envelope * (voiced + (random() - 0.5) * 0.08) * 0.6)
+        }
+      }
+      const gap = Math.floor(rate * (/[.,!?]$/.test(word) ? 0.28 : 0.07))
+      for (let index = 0; index < gap; index += 1) samples.push(0)
+      if (samples.length > rate * 30) break
+    }
+    segments.push({ start, end: samples.length / rate, text: paragraph })
+    for (let index = 0; index < rate * 0.45; index += 1) samples.push(0)
+  }
+  const bytes = new Uint8Array(44 + samples.length * 2)
+  const view = new DataView(bytes.buffer)
+  const ascii = (offset: number, value: string) =>
+    [...value].forEach((char, index) => view.setUint8(offset + index, char.charCodeAt(0)))
+  ascii(0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * 2, true)
+  ascii(8, 'WAVE')
+  ascii(12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, rate, true)
+  view.setUint32(28, rate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+  ascii(36, 'data')
+  view.setUint32(40, samples.length * 2, true)
+  samples.forEach((sample, index) =>
+    view.setInt16(44 + index * 2, Math.max(-1, Math.min(1, sample)) * 32_767, true),
+  )
+  let binary = ''
+  for (let offset = 0; offset < bytes.length; offset += 0x8000)
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + 0x8000))
+  return {
+    base64: btoa(binary),
+    duration: Math.round((samples.length / rate) * 100) / 100,
+    segments: segments.map((segment) => ({
+      start: Math.round(segment.start * 1000) / 1000,
+      end: Math.round(segment.end * 1000) / 1000,
+      text: segment.text,
+    })),
+  }
 }
 
 /** A 1×1 PNG. */

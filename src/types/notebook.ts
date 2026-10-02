@@ -38,6 +38,8 @@ export interface Notebook {
   createdAt: string | null
   updatedAt: string | null
   forkedFrom: string | null
+  /** The app spec (`nzap-app/1`) when the notebook is an app; see `appSpecOf`. */
+  app?: unknown
 }
 
 /** Values collected from the run form; keys are the declared parameter keys. */

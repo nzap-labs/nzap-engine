@@ -15,7 +15,7 @@ describe('NewRuntimeCard', () => {
     const { user, engine } = renderWithEngine(<NewRuntimeCard onCreated={onCreated} />, {
       connected: true,
     })
-    await user.type(screen.getByPlaceholderText('my-runtime'), 'trainer')
+    await user.type(await screen.findByPlaceholderText('my-runtime'), 'trainer')
     await user.click(screen.getByRole('radio', { name: 'gpu' }))
 
     const a100 = await screen.findByRole('option', { name: /A100 — not available on your plan/ })

@@ -35,6 +35,32 @@ Your code reads `params["key"]`. Values arrive as real Python types (`True`,
 Each parameter has a `key` (a Python identifier), a `label`, and optionally
 `default`, `required` and `description`.
 
+## Apps
+
+A notebook with an app spec (`app.json` in the collection, format
+`nzap-app/1`) also shows up under **Apps** as a small product: a form with real
+widgets (sliders, voice pickers, file uploads), the runtime it needs, and how
+long setup and each run take. Pressing its button:
+
+1. picks a runtime that supports the app (one that already has it loaded
+   first), or starts the recommended one for you;
+2. uploads any files from `file` inputs to `/content/nzap/inputs/<slug>/`;
+3. runs the notebook, following its progress events (install, download,
+   load, generate) against the estimates;
+4. fetches results from the runtime and shows them as an audio player with a
+   waveform and captions, an image, a table, text or a file to save.
+
+The first run on a runtime sets the model up; the notebook keeps it loaded, so
+later runs on the same runtime are **warm** and skip straight to inference.
+The app records how long each run really took per accelerator and uses your
+own numbers for later estimates.
+
+The spec and the event protocol a notebook uses to report progress and
+results are documented in
+[APPS.md](https://github.com/nzap-labs/nzap-notebooks/blob/main/APPS.md).
+Exported `.nzap.json` files carry the spec too, so an app can be shared as a
+single file and imported with **Import**.
+
 ## Writing your own
 
 **Notebooks → New notebook** opens an editor with a title, a slug, the source
@@ -48,7 +74,8 @@ Public notebooks are pull requests to
 [`nzap-labs/nzap-notebooks`](https://github.com/nzap-labs/nzap-notebooks):
 
 1. Add `notebooks/<slug>/notebook.py` (the source) and
-   `notebooks/<slug>/notebook.json` (title, description, tags, author, params).
+   `notebooks/<slug>/notebook.json` (title, description, tags, author, params),
+   plus `notebooks/<slug>/app.json` to make it an app.
 2. Run `python scripts/build_index.py` to regenerate `index.json`.
 3. Open a pull request. CI checks the schema and that `index.json` is up to
    date.

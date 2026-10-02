@@ -48,6 +48,22 @@ pub struct Notebook {
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
     pub forked_from: Option<String>,
+    /// The app spec (`nzap-app/1`) when the notebook is an app.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub app: Option<Value>,
+}
+
+/// The app spec format this engine renders (`app.json`, see the catalog's
+/// APPS.md).
+pub const APP_FORMAT: &str = "nzap-app/1";
+const MAX_APP_BYTES: usize = 64 * 1024;
+
+/// An app spec the UI can render. Anything else is treated as a plain
+/// notebook, so a catalog can ship newer app formats without breaking older
+/// engines.
+pub fn supported_app(app: &Value) -> bool {
+    app.get("format").and_then(Value::as_str) == Some(APP_FORMAT)
+        && serde_json::to_vec(app).is_ok_and(|bytes| bytes.len() <= MAX_APP_BYTES)
 }
 
 impl Notebook {
@@ -66,6 +82,7 @@ impl Notebook {
             created_at: None,
             updated_at: None,
             forked_from: None,
+            app: entry.app.filter(supported_app),
         }
     }
 
@@ -84,6 +101,7 @@ impl Notebook {
             created_at: Some(notebook.created_at),
             updated_at: Some(notebook.updated_at),
             forked_from: notebook.forked_from,
+            app: notebook.app,
         }
     }
 }
@@ -101,6 +119,8 @@ pub struct NotebookFile {
     #[serde(default)]
     pub params: Vec<NotebookParam>,
     pub source: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<Value>,
 }
 
 pub const NOTEBOOK_FILE_FORMAT: &str = "nzap-notebook/1";
@@ -194,6 +214,7 @@ impl NotebookLibrary {
             source: source.source.unwrap_or_default(),
             params: source.params,
             forked_from,
+            app: source.app,
         };
         self.create(draft)
     }
@@ -208,6 +229,7 @@ impl NotebookLibrary {
             description: notebook.description,
             params: notebook.params,
             source: notebook.source.unwrap_or_default(),
+            app: notebook.app,
         };
         Ok((format!("{}.nzap.json", notebook.slug), serde_json::to_string_pretty(&file)?))
     }
@@ -227,6 +249,7 @@ impl NotebookLibrary {
             source: file.source,
             params: file.params,
             forked_from: None,
+            app: file.app,
         })
     }
 
@@ -303,5 +326,37 @@ mod tests {
 
         let mine: Vec<_> = library.list().into_iter().filter(|notebook| notebook.is_mine).collect();
         assert_eq!(mine.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn apps_survive_the_catalog_fork_and_export() {
+        let dir = tempfile::tempdir().unwrap();
+        let library = library(dir.path());
+        let kokoro =
+            library.list().into_iter().find(|notebook| notebook.slug == "kokoro-tts").unwrap();
+        let app = kokoro.app.clone().expect("the bundled Kokoro notebook is an app");
+        assert_eq!(app["format"], APP_FORMAT);
+        let print = library.get("public:print-notebook").await.unwrap();
+        assert!(print.app.is_none(), "plain notebooks stay plain");
+
+        let fork = library.fork(&kokoro.id).await.unwrap();
+        assert_eq!(fork.app.as_ref(), Some(&app));
+        let (_, text) = library.export(&fork.id).await.unwrap();
+        let imported = library.import(&text).unwrap();
+        assert_eq!(imported.app.as_ref(), Some(&app));
+
+        let plain = library
+            .update(&imported.id, NotebookPatch { app: Some(Value::Null), ..Default::default() })
+            .unwrap();
+        assert!(plain.app.is_none());
+    }
+
+    #[test]
+    fn only_known_app_formats_are_rendered() {
+        assert!(supported_app(&json!({"format": "nzap-app/1", "outputs": []})));
+        assert!(!supported_app(&json!({"format": "nzap-app/2"})));
+        assert!(!supported_app(&json!("nzap-app/1")));
+        let huge = "x".repeat(MAX_APP_BYTES);
+        assert!(!supported_app(&json!({"format": "nzap-app/1", "tagline": huge})));
     }
 }

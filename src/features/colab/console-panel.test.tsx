@@ -24,9 +24,9 @@ async function runCell(user: ReturnType<typeof renderWithEngine>['user'], code: 
 }
 
 describe('ConsolePanel', () => {
-  it('asks for a runtime first', () => {
+  it('asks for a runtime first', async () => {
     renderWithEngine(<ConsolePanel sessionName={null} />)
-    expect(screen.getByText('Select a runtime to run code.')).toBeInTheDocument()
+    expect(await screen.findByText('Select a runtime to run code.')).toBeInTheDocument()
   })
 
   it('streams output and marks the cell finished', async () => {

@@ -283,6 +283,14 @@ Each phase ends green in CI and with a commit and push to `main`.
 - [x] Accessibility and keyboard pass (WAI-ARIA tabs, labelled controls, keyboard E2E)
 - [x] Docs: `ARCHITECTURE.md`, `OAUTH.md` (BYO client), `NOTEBOOKS.md`, `TESTING.md` (with the live-verification checklist), `TROUBLESHOOTING.md`, `RELEASING.md`
 
+### Phase 10 — Apps
+
+- [x] `nzap-app/1`: an optional `app.json` per notebook (widgets, runtime, estimates, outputs) and the `application/vnd.nzap.app+json` event protocol, specified in the catalog's APPS.md and validated by its CI
+- [x] Engine: the app spec passes through the catalog, local notebooks, forks and `.nzap.json` export/import; unknown formats degrade to plain notebooks
+- [x] UI: Apps gallery and app pages — runtime choice or one-click start of the recommended runtime, form widgets, file inputs uploaded to the runtime, live phases against estimates, warm runtimes, measured timings, audio (waveform + captions) / image / video / table / text / file outputs
+- [x] Apps tested on real Colab: Kokoro TTS (CPU and T4), Breeze TTS 2 (T4), sentiment (CPU)
+- [x] Simulated engine runs apps (stages, warm runs, synthesized WAV outputs); Vitest + Playwright coverage
+
 ## 10. Risks & open items
 
 | Risk                                                                                                                 | Mitigation                                                                                                                       |

@@ -14,6 +14,8 @@ import { Route as AccountRouteImport } from './routes/account'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as ColabRouteImport } from './routes/colab'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as AppsIndexRouteImport } from './routes/apps.index'
+import { Route as AppsAppIdRouteImport } from './routes/apps.$appId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +42,16 @@ const SettingsRoute = SettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppsIndexRoute = AppsIndexRouteImport.update({
+  id: '/apps/',
+  path: '/apps/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppsAppIdRoute = AppsAppIdRouteImport.update({
+  id: '/apps/$appId',
+  path: '/apps/$appId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +59,8 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ChatRoute
   '/colab': typeof ColabRoute
   '/settings': typeof SettingsRoute
+  '/apps/$appId': typeof AppsAppIdRoute
+  '/apps/': typeof AppsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +68,8 @@ export interface FileRoutesByTo {
   '/chat': typeof ChatRoute
   '/colab': typeof ColabRoute
   '/settings': typeof SettingsRoute
+  '/apps/$appId': typeof AppsAppIdRoute
+  '/apps': typeof AppsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +78,37 @@ export interface FileRoutesById {
   '/chat': typeof ChatRoute
   '/colab': typeof ColabRoute
   '/settings': typeof SettingsRoute
+  '/apps/$appId': typeof AppsAppIdRoute
+  '/apps/': typeof AppsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/account' | '/chat' | '/colab' | '/settings'
+  fullPaths:
+    | '/'
+    | '/account'
+    | '/chat'
+    | '/colab'
+    | '/settings'
+    | '/apps/$appId'
+    | '/apps/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/account' | '/chat' | '/colab' | '/settings'
-  id: '__root__' | '/' | '/account' | '/chat' | '/colab' | '/settings'
+  to:
+    | '/'
+    | '/account'
+    | '/chat'
+    | '/colab'
+    | '/settings'
+    | '/apps/$appId'
+    | '/apps'
+  id:
+    | '__root__'
+    | '/'
+    | '/account'
+    | '/chat'
+    | '/colab'
+    | '/settings'
+    | '/apps/$appId'
+    | '/apps/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +117,8 @@ export interface RootRouteChildren {
   ChatRoute: typeof ChatRoute
   ColabRoute: typeof ColabRoute
   SettingsRoute: typeof SettingsRoute
+  AppsAppIdRoute: typeof AppsAppIdRoute
+  AppsIndexRoute: typeof AppsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +158,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/apps/': {
+      id: '/apps/'
+      path: '/apps'
+      fullPath: '/apps/'
+      preLoaderRoute: typeof AppsIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/apps/$appId': {
+      id: '/apps/$appId'
+      path: '/apps/$appId'
+      fullPath: '/apps/$appId'
+      preLoaderRoute: typeof AppsAppIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +181,8 @@ const rootRouteChildren: RootRouteChildren = {
   ChatRoute: ChatRoute,
   ColabRoute: ColabRoute,
   SettingsRoute: SettingsRoute,
+  AppsAppIdRoute: AppsAppIdRoute,
+  AppsIndexRoute: AppsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

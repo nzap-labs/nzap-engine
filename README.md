@@ -22,6 +22,9 @@ and unsigned-build warnings.
 
 ## What it does
 
+- **Apps.** One-click AI apps such as Kokoro and Breeze text to speech: a real
+  form, the runtime each one needs, how long setup and every run take, and
+  results as audio, images or tables. The model stays warm between runs.
 - **Connect Google once.** OAuth with PKCE in your browser. The refresh token
   stays in your OS keychain and never reaches the UI.
 - **Runtimes.** Assign CPU / T4 / L4 / G4 / A100 / H100 / TPU v5e / v6e, with

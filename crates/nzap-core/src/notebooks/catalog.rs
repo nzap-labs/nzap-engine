@@ -11,6 +11,7 @@ use std::sync::{Mutex, MutexGuard, RwLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 use super::params::{self, NotebookParam};
@@ -40,6 +41,10 @@ pub struct CatalogEntry {
     pub source: String,
     /// Lower-case hex SHA-256 of the source.
     pub sha256: String,
+    /// The app spec from the notebook's `app.json` (`nzap-app/1`), passed
+    /// through to the UI as-is. Unsupported specs are dropped on the way.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<Value>,
     /// Only in the bundled snapshot.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_text: Option<String>,
@@ -414,6 +419,7 @@ mod tests {
             params: vec![],
             source: "notebooks/ok-one/notebook.py".into(),
             sha256: "a".repeat(64),
+            app: None,
             source_text: None,
         };
         let index = |entries: Vec<CatalogEntry>| CatalogIndex { version: 1, notebooks: entries };

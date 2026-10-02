@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use super::params::{self, NotebookParam};
 use crate::error::{Error, Result};
@@ -28,6 +29,9 @@ pub struct LocalNotebook {
     /// The public slug this notebook was forked from.
     #[serde(default)]
     pub forked_from: Option<String>,
+    /// Its app spec (`nzap-app/1`), when it is an app.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub app: Option<Value>,
 }
 
 /// A new notebook, or a full replacement from the editor.
@@ -43,6 +47,8 @@ pub struct NotebookDraft {
     pub params: Vec<NotebookParam>,
     #[serde(default)]
     pub forked_from: Option<String>,
+    #[serde(default)]
+    pub app: Option<Value>,
 }
 
 /// A partial update; absent fields are left alone.
@@ -54,6 +60,17 @@ pub struct NotebookPatch {
     pub description: Option<String>,
     pub source: Option<String>,
     pub params: Option<Vec<NotebookParam>>,
+    /// A new app spec; `null` turns the notebook back into a plain one.
+    #[serde(default, deserialize_with = "present")]
+    pub app: Option<Value>,
+}
+
+/// Keep an explicit `null` as `Some(Value::Null)`, so it differs from an
+/// absent field.
+fn present<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<Option<Value>, D::Error> {
+    Value::deserialize(deserializer).map(Some)
 }
 
 /// Lowercase letters, digits and dashes (hosted NZAP's rule).
@@ -80,6 +97,12 @@ fn check(draft: &NotebookDraft) -> Result<()> {
     }
     if draft.description.chars().count() > MAX_DESCRIPTION_CHARS {
         return Err(Error::invalid("The description is longer than 2000 characters."));
+    }
+    if draft.app.as_ref().is_some_and(|app| !super::supported_app(app)) {
+        return Err(Error::invalid(format!(
+            "The app spec must be a {} object of at most 64 KB.",
+            super::APP_FORMAT
+        )));
     }
     params::validate(&draft.params)
 }
@@ -156,6 +179,7 @@ impl NotebookStore {
             created_at: now.clone(),
             updated_at: now,
             forked_from: draft.forked_from,
+            app: draft.app,
         };
         self.save(&notebook)?;
         Ok(notebook)
@@ -171,6 +195,11 @@ impl NotebookStore {
             source: patch.source.unwrap_or_else(|| notebook.source.clone()),
             params: patch.params.unwrap_or_else(|| notebook.params.clone()),
             forked_from: notebook.forked_from.clone(),
+            app: match patch.app {
+                Some(Value::Null) => None,
+                Some(app) => Some(app),
+                None => notebook.app.clone(),
+            },
         };
         draft.slug = draft.slug.trim().to_owned();
         check(&draft)?;
@@ -185,6 +214,7 @@ impl NotebookStore {
         notebook.description = draft.description;
         notebook.source = draft.source;
         notebook.params = draft.params;
+        notebook.app = draft.app;
         notebook.updated_at = chrono::Utc::now().to_rfc3339();
         self.save(&notebook)?;
         Ok(notebook)
@@ -227,6 +257,7 @@ mod tests {
             params: serde_json::from_value(json!([{"key": "x", "label": "X", "type": "string"}]))
                 .unwrap(),
             forked_from: None,
+            app: None,
         }
     }
 
@@ -272,6 +303,14 @@ mod tests {
     }
 
     #[test]
+    fn a_null_app_in_a_patch_differs_from_no_app() {
+        let clear: NotebookPatch = serde_json::from_value(json!({"app": null})).unwrap();
+        assert_eq!(clear.app, Some(Value::Null));
+        let keep: NotebookPatch = serde_json::from_value(json!({"title": "x"})).unwrap();
+        assert_eq!(keep.app, None);
+    }
+
+    #[test]
     fn validation() {
         let dir = tempfile::tempdir().unwrap();
         let store = NotebookStore::new(dir.path().to_path_buf());
@@ -280,6 +319,8 @@ mod tests {
             NotebookDraft { title: " ".into(), ..draft("ok-1") },
             NotebookDraft { source: "".into(), ..draft("ok-2") },
             NotebookDraft { description: "x".repeat(2001), ..draft("ok-3") },
+            NotebookDraft { app: Some(json!({"format": "nzap-app/9"})), ..draft("ok-4") },
+            NotebookDraft { app: Some(json!(["not", "an", "object"])), ..draft("ok-5") },
         ] {
             assert!(store.create(bad).is_err());
         }

@@ -2,6 +2,180 @@
   "version": 1,
   "notebooks": [
     {
+      "slug": "breeze-tts",
+      "title": "Breeze TTS 2 (Voice Design & Cloning)",
+      "description": "Expressive 3B text to speech in English and Mandarin. Describe the voice you want in plain words, or clone one from a short reference clip. Supports vocal events like (sigh), (laugh) and (clears throat). Needs a GPU with at least 12 GB: on a free T4 it generates about 6x slower than real time, and faster on L4 or A100. Model weights are licensed for research and non-commercial use only.",
+      "tags": [
+        "app",
+        "audio",
+        "tts",
+        "voice-cloning",
+        "huggingface"
+      ],
+      "author": "NZAP Labs",
+      "params": [
+        {
+          "key": "text",
+          "label": "Text",
+          "type": "text",
+          "required": true,
+          "default": "(sigh) It is good to hear your voice again after all this time.",
+          "description": "Separate paragraphs with a blank line; each is generated in turn."
+        },
+        {
+          "key": "instruction",
+          "label": "Voice description",
+          "type": "text",
+          "default": "A warm, thoughtful young woman with a clear voice and a calm, reflective delivery.",
+          "description": "Who is speaking and how. With a reference clip this steers its delivery."
+        },
+        {
+          "key": "reference_audio",
+          "label": "Reference clip",
+          "type": "string",
+          "description": "Optional. 5 to 20 seconds of clean speech to clone."
+        },
+        {
+          "key": "reference_text",
+          "label": "Reference transcript",
+          "type": "text",
+          "description": "The exact words spoken in the reference clip."
+        },
+        {
+          "key": "consistent_voice",
+          "label": "Keep one voice across paragraphs",
+          "type": "boolean",
+          "default": true
+        },
+        {
+          "key": "cfg_scale",
+          "label": "Instruction strength",
+          "type": "number",
+          "default": 4.0
+        },
+        {
+          "key": "seed",
+          "label": "Seed",
+          "type": "integer",
+          "default": 42
+        }
+      ],
+      "source": "notebooks/breeze-tts/notebook.py",
+      "sha256": "ac0d83a6f1d3fae2b712afd61119325399fa56114b852c00f583c3b1ca00a610",
+      "app": {
+        "format": "nzap-app/1",
+        "icon": "mic-vocal",
+        "category": "audio",
+        "tagline": "Design any voice in words, or clone one from a clip.",
+        "runtime": {
+          "accelerator": "T4",
+          "supported": [
+            "T4",
+            "L4",
+            "A100",
+            "H100",
+            "G4"
+          ],
+          "minVramGb": 12
+        },
+        "estimates": {
+          "setup": 150,
+          "run": 65,
+          "measuredOn": "T4",
+          "runNote": "for about 10 seconds of speech"
+        },
+        "runLabel": "Generate speech",
+        "inputs": [
+          {
+            "param": "text",
+            "widget": "textarea",
+            "rows": 6,
+            "maxLength": 4000,
+            "placeholder": "What should the voice say? Try (laugh) or (sigh)."
+          },
+          {
+            "param": "instruction",
+            "widget": "textarea",
+            "rows": 3,
+            "placeholder": "e.g. An energetic sports commentator with a deep voice"
+          },
+          {
+            "param": "reference_audio",
+            "widget": "file",
+            "accept": "audio/*",
+            "maxMb": 25,
+            "section": "Voice cloning"
+          },
+          {
+            "param": "reference_text",
+            "widget": "textarea",
+            "rows": 2,
+            "section": "Voice cloning"
+          },
+          {
+            "param": "consistent_voice",
+            "widget": "switch",
+            "section": "Advanced"
+          },
+          {
+            "param": "cfg_scale",
+            "widget": "slider",
+            "min": 1,
+            "max": 8,
+            "step": 0.5,
+            "section": "Advanced"
+          },
+          {
+            "param": "seed",
+            "widget": "number",
+            "section": "Advanced"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "speech",
+            "kind": "audio",
+            "label": "Speech"
+          }
+        ],
+        "examples": [
+          {
+            "label": "Calm narrator",
+            "values": {
+              "instruction": "A calm, confident male narrator with a warm baritone and measured pacing, like a premium product film.",
+              "text": "Your notebooks, your GPUs, one native window."
+            }
+          },
+          {
+            "label": "Excited host",
+            "values": {
+              "instruction": "An excited young woman hosting a tech show, fast and upbeat, smiling as she speaks.",
+              "text": "(laugh) Okay, this is genuinely the fastest way I have found to run a model on a free GPU!"
+            }
+          },
+          {
+            "label": "Whisper",
+            "values": {
+              "instruction": "A soft, breathy whisper, close to the microphone, slow and intimate.",
+              "text": "Listen closely. The runtime is already warm."
+            }
+          }
+        ],
+        "links": [
+          {
+            "label": "Model card",
+            "url": "https://huggingface.co/BreezeBlue/Breeze-TTS-2"
+          },
+          {
+            "label": "Source",
+            "url": "https://github.com/breezeblue-ai/breeze-tts"
+          }
+        ],
+        "license": "Code Apache-2.0 · weights research and non-commercial only"
+      },
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Breeze TTS 2 (3B) expressive speech, packaged as an NZAP app (see APPS.md).\n#\n# Describe a voice in plain words (voice design), or upload a short reference\n# clip with its transcript (voice cloning). The first run on a runtime\n# downloads the 7.7 GB checkpoint and loads it onto the GPU (about 8 GB of\n# VRAM, so a T4 or better); later runs on the same runtime only generate.\n# Audio is written to /content/nzap/outputs/breeze-tts/.\n\nimport os\nimport subprocess\nimport sys\nimport time\n\nfrom IPython.display import display\n\nAPP = \"breeze-tts\"\nOUT_DIR = f\"/content/nzap/outputs/{APP}\"\nHOME = f\"/content/nzap/apps/{APP}\"\n# Inference code, pinned to a reviewed commit of github.com/breezeblue-ai/breeze-tts.\nREPO = \"https://github.com/breezeblue-ai/breeze-tts.git\"\nCOMMIT = \"58ec70ce5fa4cc361bdebf77ec40d1365da00ab2\"\nMODEL = \"BreezeBlue/Breeze-TTS-2\"\nMODEL_REVISION = \"3e28c5151381a722f1d8661b4118c298caa77aa4\"\nMAX_NEW_TOKENS = 1500\nMAX_SEQ_LEN = 2048\n\n\ndef nzap(event, text, **fields):\n    \"\"\"One NZAP app event; `text/plain` is what the console shows.\"\"\"\n    payload = {\"v\": 1, \"app\": APP, \"event\": event, **fields}\n    display({\"application/vnd.nzap.app+json\": payload, \"text/plain\": text}, raw=True)\n\n\ndef stage(stage_id, label, progress=None):\n    nzap(\"stage\", f\"[nzap] {label}…\", id=stage_id, label=label, progress=progress)\n\n\ndef run(*command, **kwargs):\n    subprocess.run(list(command), check=True, **kwargs)\n\n\nstarted = time.time()\nstate = globals().setdefault(\"_nzap_apps\", {}).setdefault(APP, {})\nwarm = \"runtime\" in state\n\nif not warm:\n    import torch\n\n    if not torch.cuda.is_available():\n        raise RuntimeError(\"Breeze TTS 2 needs a GPU runtime (T4 or better). Switch the runtime to a GPU.\")\n\n    stage(\"install\", \"Installing Breeze TTS 2\")\n    code_dir = f\"{HOME}/src\"\n    if not os.path.isdir(f\"{code_dir}/.git\"):\n        run(\"git\", \"clone\", \"-q\", \"--filter=blob:none\", REPO, code_dir)\n    run(\"git\", \"-C\", code_dir, \"checkout\", \"-q\", COMMIT)\n    run(\n        sys.executable, \"-m\", \"pip\", \"install\", \"-q\",\n        \"transformers==4.57.3\", \"accelerate==1.12.0\", \"soundfile\", \"librosa\", \"einops\", \"onnxruntime\", \"sox\",\n    )\n    run(sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"--no-deps\", \"qwen-tts==0.1.1\")\n    if code_dir not in sys.path:\n        sys.path.insert(0, code_dir)\n\n    stage(\"download\", \"Downloading the 7.7 GB checkpoint\")\n    from huggingface_hub import snapshot_download\n\n    weights = snapshot_download(MODEL, revision=MODEL_REVISION, local_dir=f\"{HOME}/weights\")\n\n    stage(\"load\", \"Loading Breeze TTS 2 onto the GPU\")\n    import transformers\n\n    if transformers.__version__ != \"4.57.3\":\n        raise RuntimeError(\n            f\"This runtime already imported transformers {transformers.__version__}. \"\n            \"Restart the runtime, then run Breeze TTS 2 again.\"\n        )\n    from pathlib import Path\n\n    from breeze_infer.runtime import load_runtime, update_generation_config_for_breeze\n    from models.fast_streaming import FastBreezeStreamingRuntime, FastStreamingConfig\n\n    tokenizer, model, audio_tokenizer = load_runtime(Path(weights), device=\"cuda:0\", attn_implementation=\"sdpa\")\n    update_generation_config_for_breeze(model)\n    state[\"tokenizer\"] = tokenizer\n    state[\"audio_tokenizer\"] = audio_tokenizer\n    state[\"model\"] = model\n    state[\"runtime\"] = FastBreezeStreamingRuntime(\n        model,\n        audio_tokenizer,\n        FastStreamingConfig(max_new_tokens=MAX_NEW_TOKENS, max_seq_len=MAX_SEQ_LEN, repetition_penalty=1.1),\n        tokenizer=tokenizer,\n    )\n    state[\"gpu\"] = torch.cuda.get_device_name(0)\n\nsetup_seconds = time.time() - started\nnzap(\"ready\", \"[nzap] Model ready.\", warm=warm, setupSeconds=round(setup_seconds, 2), device=state[\"gpu\"])\n\nimport numpy as np\nimport soundfile as sf\nfrom breeze_infer.runtime import set_all_seeds\nfrom breeze_infer.templates import get_template, prepare_inputs, select_template_name\n\nruntime = state[\"runtime\"]\nparagraphs = [part.strip() for part in params[\"text\"].split(\"\\n\\n\") if part.strip()]\nif not paragraphs:\n    raise ValueError(\"Enter some text to speak.\")\ninstruction = (params.get(\"instruction\") or \"\").strip()\nref_audio = (params.get(\"reference_audio\") or \"\").strip()\nref_text = (params.get(\"reference_text\") or \"\").strip()\nif bool(ref_audio) != bool(ref_text):\n    raise ValueError(\"A reference clip needs its exact transcript (and the other way round).\")\nif ref_audio and not os.path.isfile(ref_audio):\n    raise FileNotFoundError(f\"Reference audio not found on the runtime: {ref_audio}\")\nseed = int(params.get(\"seed\", 42))\ncfg_scale = float(params.get(\"cfg_scale\", 4.0))\nkeep_voice = bool(params.get(\"consistent_voice\", True))\n\n\ndef speak(text, ref_path, ref_transcript):\n    request = {\"id\": \"nzap\", \"text\": text, \"speaker\": \"S0\"}\n    if instruction:\n        request[\"instruction\"] = instruction\n    if ref_path:\n        request[\"ref_audio_path\"] = ref_path\n        request[\"ref_text\"] = ref_transcript\n    set_all_seeds(seed)\n    inputs = prepare_inputs(\n        state[\"tokenizer\"],\n        state[\"audio_tokenizer\"],\n        state[\"model\"],\n        [request],\n        get_template(select_template_name(request)),\n        # Classifier-free guidance steers the instruction; plain cloning has none.\n        guidance_scale=cfg_scale if instruction else 1.0,\n        guidance_scale_ref=None,\n        guidance_scale_ins=None,\n    )\n    chunks = [chunk.audio for chunk in runtime.iter_audio_chunks(inputs, request_id=\"nzap\", seed=seed)]\n    if not chunks:\n        raise RuntimeError(\"Breeze produced no audio for that text.\")\n    return np.concatenate(chunks).astype(np.float32)\n\n\nos.makedirs(OUT_DIR, exist_ok=True)\nstamp = time.strftime(\"%Y%m%d-%H%M%S\")\npieces = []\nrun_started = time.time()\nfor index, paragraph in enumerate(paragraphs):\n    stage(\"run\", f\"Generating paragraph {index + 1} of {len(paragraphs)}\", progress=index / len(paragraphs))\n    audio = speak(paragraph, ref_audio, ref_text)\n    pieces.append(audio)\n    # Without a reference clip, later paragraphs clone the first one so the\n    # designed voice stays the same across the whole text.\n    if index == 0 and keep_voice and not ref_audio and len(paragraphs) > 1:\n        ref_audio = f\"{OUT_DIR}/{stamp}-voice.wav\"\n        sf.write(ref_audio, audio, runtime.sample_rate, subtype=\"PCM_16\")\n        ref_text = paragraph\n\npause = np.zeros(int(runtime.sample_rate * 0.45), dtype=np.float32)\naudio = np.concatenate([part for piece in pieces for part in (piece, pause)][:-1])\n# Where each paragraph starts and ends, for captions and syncing.\nsegments, offset = [], 0\nfor paragraph, piece in zip(paragraphs, pieces):\n    segments.append({\"start\": round(offset / runtime.sample_rate, 3), \"end\": round((offset + len(piece)) / runtime.sample_rate, 3), \"text\": paragraph})\n    offset += len(piece) + len(pause)\npath = f\"{OUT_DIR}/{stamp}.wav\"\nsf.write(path, audio, runtime.sample_rate, subtype=\"PCM_16\")\nrun_seconds = time.time() - run_started\nduration = len(audio) / runtime.sample_rate\n\nnzap(\n    \"output\",\n    f\"[nzap] Saved {path} ({duration:.1f}s of audio)\",\n    id=\"speech\",\n    kind=\"audio\",\n    path=path,\n    mime=\"audio/wav\",\n    meta={\"duration\": round(duration, 2), \"sampleRate\": runtime.sample_rate, \"segments\": segments},\n)\nnzap(\n    \"done\",\n    f\"[nzap] Done in {time.time() - started:.1f}s (audio {duration:.1f}s, {duration / max(run_seconds, 1e-6):.2f}x realtime).\",\n    seconds={\"setup\": round(setup_seconds, 2), \"run\": round(run_seconds, 2)},\n    warm=warm,\n)\n"
+    },
+    {
       "slug": "gpu-check",
       "title": "GPU / TPU Check",
       "description": "Shows the accelerator attached to the runtime (nvidia-smi, PyTorch and optionally JAX).",
@@ -22,6 +196,277 @@
       "source": "notebooks/gpu-check/notebook.py",
       "sha256": "2422f2c3a3c9ebe22fd88d88a29c5ad412741f46fbccc7d0de6196a0f26924f1",
       "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Reports the accelerator attached to this runtime, as each framework sees it.\n\nimport shutil\nimport subprocess\n\nif shutil.which(\"nvidia-smi\"):\n    print(subprocess.run([\"nvidia-smi\"], capture_output=True, text=True).stdout)\nelse:\n    print(\"nvidia-smi not found: this runtime has no NVIDIA GPU.\")\n\ntry:\n    import torch\n\n    if torch.cuda.is_available():\n        for index in range(torch.cuda.device_count()):\n            props = torch.cuda.get_device_properties(index)\n            print(f\"torch sees cuda:{index} {props.name} ({props.total_memory / 2**30:.1f} GiB)\")\n    else:\n        print(\"torch: CUDA is not available\")\nexcept ImportError:\n    print(\"torch is not installed\")\n\nif params.get(\"check_jax\"):\n    try:\n        import jax\n\n        print(f\"jax devices: {jax.devices()}\")\n    except ImportError:\n        print(\"jax is not installed\")\n"
+    },
+    {
+      "slug": "kokoro-tts",
+      "title": "Kokoro Text to Speech",
+      "description": "Natural speech from text with Kokoro-82M: 54 voices in nine languages and adjustable speed. Runs on a CPU runtime, and much faster on a GPU.",
+      "tags": [
+        "app",
+        "audio",
+        "tts",
+        "huggingface"
+      ],
+      "author": "NZAP Labs",
+      "params": [
+        {
+          "key": "text",
+          "label": "Text",
+          "type": "text",
+          "required": true,
+          "default": "Hello from NZAP Engine. This voice was generated on your own Colab runtime.",
+          "description": "Blank lines start a new paragraph."
+        },
+        {
+          "key": "language",
+          "label": "Language",
+          "type": "select",
+          "options": [
+            "a",
+            "b",
+            "e",
+            "f",
+            "h",
+            "i",
+            "j",
+            "p",
+            "z"
+          ],
+          "default": "a"
+        },
+        {
+          "key": "voice",
+          "label": "Voice",
+          "type": "select",
+          "options": [
+            "af_heart",
+            "af_bella",
+            "af_nicole",
+            "af_aoede",
+            "af_kore",
+            "af_sarah",
+            "af_nova",
+            "af_sky",
+            "af_alloy",
+            "af_jessica",
+            "af_river",
+            "am_michael",
+            "am_fenrir",
+            "am_puck",
+            "am_echo",
+            "am_eric",
+            "am_liam",
+            "am_onyx",
+            "am_santa",
+            "am_adam",
+            "bf_emma",
+            "bf_isabella",
+            "bf_alice",
+            "bf_lily",
+            "bm_george",
+            "bm_fable",
+            "bm_lewis",
+            "bm_daniel",
+            "ef_dora",
+            "em_alex",
+            "em_santa",
+            "ff_siwis",
+            "hf_alpha",
+            "hf_beta",
+            "hm_omega",
+            "hm_psi",
+            "if_sara",
+            "im_nicola",
+            "jf_alpha",
+            "jf_gongitsune",
+            "jf_nezumi",
+            "jf_tebukuro",
+            "jm_kumo",
+            "pf_dora",
+            "pm_alex",
+            "pm_santa",
+            "zf_xiaobei",
+            "zf_xiaoni",
+            "zf_xiaoxiao",
+            "zf_xiaoyi",
+            "zm_yunjian",
+            "zm_yunxi",
+            "zm_yunxia",
+            "zm_yunyang"
+          ],
+          "default": "af_heart"
+        },
+        {
+          "key": "speed",
+          "label": "Speed",
+          "type": "number",
+          "default": 1.0
+        }
+      ],
+      "source": "notebooks/kokoro-tts/notebook.py",
+      "sha256": "9c614f8a7f80fbe9a5fab4ee8c2f689ef4503c1aba84ae99e82ec273037ac435",
+      "app": {
+        "format": "nzap-app/1",
+        "icon": "audio-lines",
+        "category": "audio",
+        "tagline": "Turn text into lifelike speech in seconds.",
+        "runtime": {
+          "accelerator": "T4",
+          "supported": [
+            "CPU",
+            "T4",
+            "L4",
+            "A100",
+            "H100",
+            "G4"
+          ]
+        },
+        "estimates": {
+          "setup": 50,
+          "run": 2,
+          "measuredOn": "T4",
+          "runNote": "for about 10 seconds of speech"
+        },
+        "runLabel": "Generate speech",
+        "inputs": [
+          {
+            "param": "text",
+            "widget": "textarea",
+            "rows": 6,
+            "maxLength": 5000,
+            "placeholder": "Type or paste what you want spoken…"
+          },
+          {
+            "param": "language",
+            "widget": "segmented",
+            "labels": {
+              "a": "English (US)",
+              "b": "English (UK)",
+              "e": "Spanish",
+              "f": "French",
+              "h": "Hindi",
+              "i": "Italian",
+              "j": "Japanese (first use adds ~2 min)",
+              "p": "Portuguese (BR)",
+              "z": "Mandarin (first use adds ~30 s)"
+            }
+          },
+          {
+            "param": "voice",
+            "widget": "select",
+            "labels": {
+              "af_heart": "Heart · female · top rated",
+              "af_bella": "Bella · female · top rated",
+              "af_nicole": "Nicole · female · top rated",
+              "af_aoede": "Aoede · female",
+              "af_kore": "Kore · female",
+              "af_sarah": "Sarah · female",
+              "af_nova": "Nova · female",
+              "af_sky": "Sky · female",
+              "af_alloy": "Alloy · female",
+              "af_jessica": "Jessica · female",
+              "af_river": "River · female",
+              "am_michael": "Michael · male · top rated",
+              "am_fenrir": "Fenrir · male · top rated",
+              "am_puck": "Puck · male",
+              "am_echo": "Echo · male",
+              "am_eric": "Eric · male",
+              "am_liam": "Liam · male",
+              "am_onyx": "Onyx · male",
+              "am_santa": "Santa · male",
+              "am_adam": "Adam · male",
+              "bf_emma": "Emma · female · top rated",
+              "bf_isabella": "Isabella · female",
+              "bf_alice": "Alice · female",
+              "bf_lily": "Lily · female",
+              "bm_george": "George · male · top rated",
+              "bm_fable": "Fable · male",
+              "bm_lewis": "Lewis · male",
+              "bm_daniel": "Daniel · male",
+              "ef_dora": "Dora · female",
+              "em_alex": "Alex · male",
+              "em_santa": "Santa · male",
+              "ff_siwis": "Siwis · female · top rated",
+              "hf_alpha": "Alpha · female",
+              "hf_beta": "Beta · female",
+              "hm_omega": "Omega · male",
+              "hm_psi": "Psi · male",
+              "if_sara": "Sara · female",
+              "im_nicola": "Nicola · male",
+              "jf_alpha": "Alpha · female",
+              "jf_gongitsune": "Gongitsune · female",
+              "jf_nezumi": "Nezumi · female",
+              "jf_tebukuro": "Tebukuro · female",
+              "jm_kumo": "Kumo · male",
+              "pf_dora": "Dora · female",
+              "pm_alex": "Alex · male",
+              "pm_santa": "Santa · male",
+              "zf_xiaobei": "Xiaobei · female",
+              "zf_xiaoni": "Xiaoni · female",
+              "zf_xiaoxiao": "Xiaoxiao · female",
+              "zf_xiaoyi": "Xiaoyi · female",
+              "zm_yunjian": "Yunjian · male",
+              "zm_yunxi": "Yunxi · male",
+              "zm_yunxia": "Yunxia · male",
+              "zm_yunyang": "Yunyang · male"
+            },
+            "filter": {
+              "param": "language",
+              "prefix": true
+            }
+          },
+          {
+            "param": "speed",
+            "widget": "slider",
+            "min": 0.5,
+            "max": 2.0,
+            "step": 0.05,
+            "unit": "x"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "speech",
+            "kind": "audio",
+            "label": "Speech"
+          }
+        ],
+        "examples": [
+          {
+            "label": "Product intro",
+            "values": {
+              "language": "a",
+              "voice": "af_heart",
+              "text": "Meet NZAP Engine: your own Colab GPUs, from a native window."
+            }
+          },
+          {
+            "label": "British narrator",
+            "values": {
+              "language": "b",
+              "voice": "bm_george",
+              "speed": 0.95,
+              "text": "In the beginning, there was a single notebook, and it was good."
+            }
+          },
+          {
+            "label": "Bonjour",
+            "values": {
+              "language": "f",
+              "voice": "ff_siwis",
+              "text": "Bonjour ! Ceci est une voix générée sur votre propre machine Colab."
+            }
+          }
+        ],
+        "links": [
+          {
+            "label": "Model card",
+            "url": "https://huggingface.co/hexgrad/Kokoro-82M"
+          }
+        ],
+        "license": "Apache-2.0"
+      },
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Kokoro-82M text to speech, packaged as an NZAP app (see APPS.md).\n#\n# The first run on a runtime installs Kokoro and loads the model; the model\n# stays in the kernel, so every later run on the same runtime only\n# synthesises. The audio is written to /content/nzap/outputs/kokoro-tts/.\n\nimport os\nimport subprocess\nimport sys\nimport time\n\nfrom IPython.display import display\n\nAPP = \"kokoro-tts\"\nOUT_DIR = f\"/content/nzap/outputs/{APP}\"\nSAMPLE_RATE = 24_000\n# misaki[en]'s runtime dependencies, minus spacy-curated-transformers.\nBASE_DEPS = (\"loguru\", \"addict\", \"regex\", \"num2words\", \"spacy\", \"phonemizer-fork\", \"espeakng-loader\", \"soundfile\")\n# Japanese and Mandarin need extra phonemisers, installed the first time.\nEXTRAS = {\n    \"j\": (\"fugashi\", \"jaconv\", \"mojimoji\", \"pyopenjtalk\", \"unidic-lite\"),\n    \"z\": (\"cn2an\", \"jieba\", \"ordered-set\", \"pypinyin\", \"pypinyin-dict\"),\n}\n\n# Colab's huggingface_hub otherwise waits on the notebook-UI secret store.\nos.environ.setdefault(\"HF_HUB_DISABLE_IMPLICIT_TOKEN\", \"1\")\n\n\ndef nzap(event, text, **fields):\n    \"\"\"One NZAP app event; `text/plain` is what the console shows.\"\"\"\n    payload = {\"v\": 1, \"app\": APP, \"event\": event, **fields}\n    display({\"application/vnd.nzap.app+json\": payload, \"text/plain\": text}, raw=True)\n\n\ndef stage(stage_id, label):\n    nzap(\"stage\", f\"[nzap] {label}…\", id=stage_id, label=label)\n\n\ndef pip(*packages):\n    # Kokoro and misaki declare Python < 3.13 but run fine on Colab's newer Python.\n    command = [sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"--ignore-requires-python\", *packages]\n    result = subprocess.run(command, capture_output=True, text=True)\n    if result.returncode:\n        raise RuntimeError(f\"pip install {' '.join(packages)} failed:\\n{result.stderr[-2000:]}\")\n\n\nstarted = time.time()\nstate = globals().setdefault(\"_nzap_apps\", {}).setdefault(APP, {})\nlang = params.get(\"language\", \"a\")\nwarm = \"model\" in state\n\nif not warm:\n    stage(\"install\", \"Installing Kokoro and espeak-ng\")\n    subprocess.run(\n        [\"apt-get\", \"-qq\", \"-y\", \"install\", \"espeak-ng\"],\n        check=True,\n        stdout=subprocess.DEVNULL,\n    )\n    # Without --no-deps, misaki[en] drags in spacy-curated-transformers, whose\n    # tokenizer has no wheel for Colab's Python and fails to build.\n    pip(\"--no-deps\", \"kokoro==0.9.4\", \"misaki==0.9.4\")\n    pip(*BASE_DEPS)\n\n    stage(\"load\", \"Loading Kokoro-82M\")\n    import torch\n    from kokoro import KModel\n\n    state[\"device\"] = \"cuda\" if torch.cuda.is_available() else \"cpu\"\n    state[\"model\"] = KModel(repo_id=\"hexgrad/Kokoro-82M\").to(state[\"device\"]).eval()\n    state[\"pipelines\"] = {}\n\npipelines = state[\"pipelines\"]\nif lang not in pipelines:\n    if lang in EXTRAS:\n        stage(\"install\", \"Installing the phonemiser for this language\")\n        pip(*EXTRAS[lang])\n    stage(\"load\", \"Preparing the voice pipeline\")\n    from kokoro import KPipeline\n\n    pipelines[lang] = KPipeline(lang_code=lang, repo_id=\"hexgrad/Kokoro-82M\", model=state[\"model\"])\n\nsetup_seconds = time.time() - started\nnzap(\"ready\", \"[nzap] Model ready.\", warm=warm, setupSeconds=round(setup_seconds, 2), device=state[\"device\"])\n\nimport numpy as np\nimport soundfile as sf\nimport torch\n\ntext = params[\"text\"].strip()\nvoice = params.get(\"voice\", \"af_heart\")\nif not voice.startswith(lang):\n    raise ValueError(f\"Voice {voice} does not speak the selected language ({lang}).\")\n\nstage(\"run\", \"Synthesising speech\")\nrun_started = time.time()\nchunks, segments, offset = [], [], 0\nwith torch.inference_mode():\n    for result in pipelines[lang](text, voice=voice, speed=float(params.get(\"speed\", 1.0)), split_pattern=r\"\\n+\"):\n        if result.audio is not None:\n            chunk = result.audio.cpu().numpy()\n            chunks.append(chunk)\n            # Where each piece of text starts and ends, for captions and syncing.\n            segments.append(\n                {\"start\": round(offset / SAMPLE_RATE, 3), \"end\": round((offset + len(chunk)) / SAMPLE_RATE, 3), \"text\": result.graphemes}\n            )\n            offset += len(chunk)\nif not chunks:\n    raise RuntimeError(\"Kokoro produced no audio for that text.\")\n\naudio = np.concatenate(chunks)\nos.makedirs(OUT_DIR, exist_ok=True)\npath = f\"{OUT_DIR}/{time.strftime('%Y%m%d-%H%M%S')}-{voice}.wav\"\nsf.write(path, audio, SAMPLE_RATE, subtype=\"PCM_16\")\nrun_seconds = time.time() - run_started\nduration = len(audio) / SAMPLE_RATE\n\nnzap(\n    \"output\",\n    f\"[nzap] Saved {path} ({duration:.1f}s of audio)\",\n    id=\"speech\",\n    kind=\"audio\",\n    path=path,\n    mime=\"audio/wav\",\n    meta={\"duration\": round(duration, 2), \"sampleRate\": SAMPLE_RATE, \"voice\": voice, \"segments\": segments},\n)\nnzap(\n    \"done\",\n    f\"[nzap] Done in {time.time() - started:.1f}s (audio {duration:.1f}s, {duration / max(run_seconds, 1e-6):.0f}x realtime).\",\n    seconds={\"setup\": round(setup_seconds, 2), \"run\": round(run_seconds, 2)},\n    warm=warm,\n)\n"
     },
     {
       "slug": "print-notebook",
@@ -64,6 +509,7 @@
       "title": "Sentiment Analysis (Hugging Face)",
       "description": "Scores each line of text as positive or negative with a DistilBERT classifier.",
       "tags": [
+        "app",
         "inference",
         "nlp",
         "huggingface"
@@ -79,8 +525,62 @@
         }
       ],
       "source": "notebooks/hf-sentiment/notebook.py",
-      "sha256": "04894f2c801d0ed6b1c82c3e303b2fde7936e972176d25822725a5f7c7a34b58",
-      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Classifies the sentiment of one or more lines of text.\n\nimport subprocess\nimport sys\n\ntry:\n    import transformers  # noqa: F401\nexcept ImportError:\n    subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"transformers\"])\n\nimport torch\nfrom transformers import pipeline\n\nclassifier = pipeline(\n    \"sentiment-analysis\",\n    model=\"distilbert-base-uncased-finetuned-sst-2-english\",\n    device=0 if torch.cuda.is_available() else -1,\n)\nlines = [line.strip() for line in params[\"text\"].splitlines() if line.strip()]\nfor line, result in zip(lines, classifier(lines)):\n    print(f\"{result['label']:>8} {result['score']:.3f}  {line}\")\n"
+      "sha256": "fce530dab467231d0cfd47ad546a2e382a2ca487965d3fc9e24219a789354610",
+      "app": {
+        "format": "nzap-app/1",
+        "icon": "smile",
+        "category": "text",
+        "tagline": "Score how positive or negative each line of text is.",
+        "runtime": {
+          "accelerator": "CPU",
+          "supported": [
+            "CPU",
+            "T4",
+            "L4",
+            "A100",
+            "H100",
+            "G4"
+          ]
+        },
+        "estimates": {
+          "setup": 20,
+          "run": 1,
+          "measuredOn": "CPU",
+          "runNote": "for a few dozen lines"
+        },
+        "runLabel": "Score sentiment",
+        "inputs": [
+          {
+            "param": "text",
+            "widget": "textarea",
+            "rows": 8,
+            "placeholder": "One review, tweet or sentence per line"
+          }
+        ],
+        "outputs": [
+          {
+            "id": "scores",
+            "kind": "table",
+            "label": "Scores"
+          }
+        ],
+        "examples": [
+          {
+            "label": "Product reviews",
+            "values": {
+              "text": "Setup took thirty seconds. Love it.\nThe battery died after a day.\nIt's fine, I guess.\nBest purchase this year!"
+            }
+          }
+        ],
+        "links": [
+          {
+            "label": "Model card",
+            "url": "https://huggingface.co/distilbert/distilbert-base-uncased-finetuned-sst-2-english"
+          }
+        ],
+        "license": "Apache-2.0"
+      },
+      "sourceText": "# NZAP Engine injects a `params` dict before this script runs.\n# Classifies the sentiment of one or more lines of text, as an NZAP app\n# (see APPS.md): the scores come back as a table.\n\nimport os\nimport subprocess\nimport sys\nimport time\n\nfrom IPython.display import display\n\nAPP = \"hf-sentiment\"\nos.environ.setdefault(\"HF_HUB_DISABLE_IMPLICIT_TOKEN\", \"1\")\n\n\ndef nzap(event, text, **fields):\n    \"\"\"One NZAP app event; `text/plain` is what the console shows.\"\"\"\n    payload = {\"v\": 1, \"app\": APP, \"event\": event, **fields}\n    display({\"application/vnd.nzap.app+json\": payload, \"text/plain\": text}, raw=True)\n\n\nstarted = time.time()\nstate = globals().setdefault(\"_nzap_apps\", {}).setdefault(APP, {})\nwarm = \"classifier\" in state\nif not warm:\n    nzap(\"stage\", \"[nzap] Loading DistilBERT…\", id=\"load\", label=\"Loading DistilBERT\")\n    try:\n        import transformers  # noqa: F401\n    except ImportError:\n        subprocess.check_call([sys.executable, \"-m\", \"pip\", \"install\", \"-q\", \"transformers\"])\n\n    import torch\n    from transformers import pipeline\n\n    state[\"classifier\"] = pipeline(\n        \"sentiment-analysis\",\n        model=\"distilbert-base-uncased-finetuned-sst-2-english\",\n        device=0 if torch.cuda.is_available() else -1,\n    )\nsetup_seconds = time.time() - started\nnzap(\"ready\", \"[nzap] Model ready.\", warm=warm, setupSeconds=round(setup_seconds, 2))\n\nnzap(\"stage\", \"[nzap] Scoring…\", id=\"run\", label=\"Scoring\")\nrun_started = time.time()\nlines = [line.strip() for line in params[\"text\"].splitlines() if line.strip()]\nresults = state[\"classifier\"](lines)\nrows = []\nfor line, result in zip(lines, results):\n    print(f\"{result['label']:>8} {result['score']:.3f}  {line}\")\n    rows.append([line, result[\"label\"].title(), round(result[\"score\"], 4)])\n\nnzap(\n    \"output\",\n    f\"[nzap] Scored {len(rows)} lines.\",\n    id=\"scores\",\n    kind=\"table\",\n    columns=[\"Text\", \"Sentiment\", \"Confidence\"],\n    rows=rows,\n)\nnzap(\n    \"done\",\n    f\"[nzap] Done in {time.time() - started:.1f}s.\",\n    seconds={\"setup\": round(setup_seconds, 2), \"run\": round(time.time() - run_started, 2)},\n    warm=warm,\n)\n"
     },
     {
       "slug": "hf-text-generation",

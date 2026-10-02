@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import {
   Cpu,
   Gauge,
+  LayoutGrid,
   PanelLeftClose,
   Plus,
   Presentation,
@@ -195,6 +196,12 @@ export function Sidebar({ onClose }: { onClose: () => void }) {
           icon={<Plus />}
           label="New Chat"
           onClick={() => toast.info('Chat arrives in a later release.')}
+        />
+        <SidebarItem
+          icon={<LayoutGrid />}
+          label="Apps"
+          to="/apps"
+          active={pathname.startsWith('/apps')}
         />
         <SidebarItem icon={<Cpu />} label="Colab" to="/colab" active={pathname === '/colab'} />
         <SidebarItem
