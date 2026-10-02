@@ -1,4 +1,7 @@
 import { cn } from '@/lib/cn'
+import markLight from '@/assets/brand/nzap-mark-light-160.png'
+import markDark from '@/assets/brand/nzap-mark-dark-160.png'
+import wordMask from '@/assets/brand/nzap-word-mask.png'
 
 export function SparkleIcon({ className }: { className?: string }) {
   return (
@@ -8,24 +11,60 @@ export function SparkleIcon({ className }: { className?: string }) {
   )
 }
 
+/**
+ * The NZAP Labs "NZ" ribbon. The dark rendition carries the edge highlights
+ * that keep the black chrome readable on a dark stage.
+ */
 export function LogoMark({ className }: { className?: string }) {
   return (
-    <span
-      className={cn(
-        'inline-grid size-9 shrink-0 place-items-center rounded-[10px] bg-ink',
-        className,
-      )}
-    >
-      <SparkleIcon className="size-5 text-sunshine" />
+    <span className={cn('relative inline-block size-9 shrink-0', className)}>
+      <img
+        src={markLight}
+        alt=""
+        aria-hidden
+        draggable={false}
+        className="size-full object-contain dark:hidden"
+      />
+      <img
+        src={markDark}
+        alt=""
+        aria-hidden
+        draggable={false}
+        className="hidden size-full object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.28)] dark:block"
+      />
     </span>
+  )
+}
+
+/** "NZΛP" in the logo's own lettering, tinted with the current text colour. */
+export function LogoWord({ className }: { className?: string }) {
+  return (
+    <span
+      role="img"
+      aria-label="NZAP"
+      className={cn('inline-block aspect-[627/87] h-3 bg-current', className)}
+      style={{
+        maskImage: `url(${wordMask})`,
+        WebkitMaskImage: `url(${wordMask})`,
+        maskSize: 'contain',
+        WebkitMaskSize: 'contain',
+        maskRepeat: 'no-repeat',
+        WebkitMaskRepeat: 'no-repeat',
+      }}
+    />
   )
 }
 
 export function LogoWordmark({ className }: { className?: string }) {
   return (
     <span className={cn('inline-flex items-center gap-2.5', className)}>
-      <LogoMark />
-      <span className="text-lg font-medium tracking-tight">NZAP</span>
+      <LogoMark className="size-9" />
+      <span className="flex flex-col gap-1.5">
+        <LogoWord />
+        <span className="text-[10px] font-medium uppercase leading-none tracking-[0.42em] text-graphite">
+          Engine
+        </span>
+      </span>
     </span>
   )
 }

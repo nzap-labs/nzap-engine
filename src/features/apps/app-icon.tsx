@@ -59,15 +59,18 @@ const CATEGORY_ICON: Record<AppCategory, LucideIcon> = {
   utility: Box,
 }
 
-/** Each category gets its own tint so the gallery scans at a glance. */
+/**
+ * Brushed-chrome tiles, each category with a faint tint of its own so the
+ * gallery still scans at a glance.
+ */
 const CATEGORY_TINT: Record<AppCategory, string> = {
-  audio: 'from-[#ffda6e] to-[#e78b72]',
-  image: 'from-[#e78b72] to-[#b48cf2]',
-  video: 'from-[#b48cf2] to-[#6ea8fe]',
-  text: 'from-[#6ece9d] to-[#6ea8fe]',
-  vision: 'from-[#6ea8fe] to-[#6ece9d]',
-  data: 'from-[#c9c4b6] to-[#6f706b]',
-  utility: 'from-[#d6d1c5] to-[#9a9b93]',
+  audio: 'from-[#ffffff] via-[#d7d9e2] to-[#8f95a8]',
+  image: 'from-[#ffffff] via-[#e2d7dc] to-[#a68f99]',
+  video: 'from-[#ffffff] via-[#dcd7e4] to-[#968fab]',
+  text: 'from-[#ffffff] via-[#d7e2dd] to-[#8fa89c]',
+  vision: 'from-[#ffffff] via-[#d7dfe4] to-[#8fa1ab]',
+  data: 'from-[#ffffff] via-[#dededa] to-[#9d9d96]',
+  utility: 'from-[#ffffff] via-[#dcdcdc] to-[#9a9a9a]',
 }
 
 function appIcon(icon: string | undefined, category: AppCategory): LucideIcon {
@@ -87,7 +90,7 @@ export function AppIcon({
     <span
       aria-hidden
       className={cn(
-        'inline-grid size-12 shrink-0 place-items-center rounded-2xl bg-linear-to-br text-[#11110f] shadow-[inset_0_1px_0_rgba(255,255,255,0.45)]',
+        'inline-grid size-12 shrink-0 place-items-center rounded-2xl bg-linear-to-br text-[#0c0c0e] shadow-[inset_0_1px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(0,0,0,0.25),0_1px_2px_rgba(0,0,0,0.25)]',
         CATEGORY_TINT[category] ?? CATEGORY_TINT.utility,
         className,
       )}

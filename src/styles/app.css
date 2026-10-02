@@ -1,26 +1,40 @@
 @import 'tailwindcss';
 
-/* ── NZAP design tokens (docs/landing-source/prompt.md) ─────────────── */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ── NZAP design tokens ─────────────────────────────────────────────────
+ * Monochrome "chrome", from the NZAP Labs mark: ink on paper, with the
+ * accent being ink itself (inverted in dark mode) and a brushed-metal
+ * gradient for primary actions. Mint and coral stay for status only.
+ * (`sunshine` is the historical name of the accent token.)
+ */
 :root {
-  --color-cream-paper: #f8f5ed;
-  --color-soft-paper: #f1ede2;
-  --color-ink: #11110f;
-  --color-graphite: #6f706b;
-  --color-sunshine: #ffda6e;
-  --color-mint: #6ece9d;
-  --color-coral: #e78b72;
-  --color-quiet-line: #d6d1c5;
-  /* text placed on sunshine fills — constant across themes for contrast */
-  --color-on-sunshine: #11110f;
+  --color-cream-paper: #f6f6f3;
+  --color-soft-paper: #ecece8;
+  --color-ink: #0c0c0e;
+  --color-graphite: #66676c;
+  --color-sunshine: #0c0c0e;
+  --color-mint: #3fae78;
+  --color-coral: #dc6a52;
+  --color-quiet-line: #d8d8d3;
+  --color-on-sunshine: #f6f6f3;
+  --chrome-fill: linear-gradient(180deg, #3a3a40 0%, #141417 46%, #050506 100%);
+  --chrome-edge: inset 0 1px 0 rgb(255 255 255 / 0.22), inset 0 -1px 0 rgb(0 0 0 / 0.5);
+  --chrome-text: linear-gradient(180deg, #0c0c0e 0%, #4b4c52 55%, #0c0c0e 100%);
 }
 
-/* x.ai-style dark: near-black warm canvas, dark-gray panels, light "ink" */
+/* Near-black stage with a cool chrome ink (the logo's dark rendition). */
 .dark {
-  --color-cream-paper: #0f0f0e;
-  --color-soft-paper: #191917;
-  --color-ink: #f0eee6;
-  --color-graphite: #9a9b93;
-  --color-quiet-line: #2b2b28;
+  --color-cream-paper: #0a0a0b;
+  --color-soft-paper: #141416;
+  --color-ink: #f1f1ef;
+  --color-graphite: #9b9ca3;
+  --color-sunshine: #f1f1ef;
+  --color-quiet-line: #26262b;
+  --color-on-sunshine: #0a0a0b;
+  --chrome-fill: linear-gradient(180deg, #ffffff 0%, #d9dade 52%, #a9abb3 100%);
+  --chrome-edge: inset 0 1px 0 rgb(255 255 255 / 0.9), inset 0 -1px 0 rgb(0 0 0 / 0.18);
+  --chrome-text: linear-gradient(180deg, #ffffff 0%, #c4c6cd 55%, #8e9099 100%);
 }
 
 @theme inline {
@@ -77,6 +91,20 @@
 }
 
 @layer utilities {
+  /* Brushed-metal fill for primary actions (the logo's chrome). */
+  .chrome-fill {
+    background-image: var(--chrome-fill);
+    box-shadow: var(--chrome-edge);
+  }
+
+  /* Chrome gradient text for display headings. */
+  .chrome-text {
+    background-image: var(--chrome-text);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   .scrollbar-thin {
     scrollbar-width: thin;
     scrollbar-color: var(--color-quiet-line) transparent;

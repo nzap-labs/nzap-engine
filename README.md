@@ -1,3 +1,5 @@
+<p align="center"><img src="brand/app-icon-1024.png" alt="NZAP Engine" width="128" /></p>
+
 # NZAP Engine
 
 **Your own Google Colab runtimes, from a native window.**

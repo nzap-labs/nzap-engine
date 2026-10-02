@@ -291,6 +291,12 @@ Each phase ends green in CI and with a commit and push to `main`.
 - [x] Apps tested on real Colab: Kokoro TTS (CPU and T4), Breeze TTS 2 (T4), sentiment (CPU)
 - [x] Simulated engine runs apps (stages, warm runs, synthesized WAV outputs); Vitest + Playwright coverage
 
+### Phase 11 — Brand
+
+- [x] NZAP Labs "NZ" chrome ribbon as the app icon (macOS/Windows/Linux sets regenerated from `brand/`), favicon, sidebar lockup with the logo's own "NZΛP" lettering
+- [x] Monochrome chrome palette: ink accent inverted per theme, brushed-metal primary actions, chrome display type; mint/coral kept for status
+- [x] `brand/build_brand.py` rebuilds every asset (icon, marks, wordmark masks, social card) from the two source logos
+
 ## 10. Risks & open items
 
 | Risk                                                                                                                 | Mitigation                                                                                                                       |

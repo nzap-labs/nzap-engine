@@ -92,11 +92,11 @@ export function AppsPage() {
       <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto px-4 pb-10 md:px-6">
         <div className="mx-auto w-full max-w-6xl space-y-6">
           <section className="relative overflow-hidden rounded-[24px] border border-ink bg-paper p-6 md:p-8">
-            <div className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-sunshine/25 blur-3xl" />
+            <div className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-ink/10 blur-3xl" />
             <p className="relative text-xs font-medium uppercase tracking-[0.18em] text-graphite">
               Run AI on your own Colab
             </p>
-            <h2 className="relative mt-2 max-w-2xl text-3xl font-medium tracking-tight md:text-4xl">
+            <h2 className="chrome-text relative mt-2 max-w-2xl text-3xl font-medium tracking-tight md:text-4xl">
               One click from model to result.
             </h2>
             <p className="relative mt-3 max-w-2xl text-sm leading-relaxed text-graphite">

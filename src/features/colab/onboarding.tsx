@@ -1,6 +1,6 @@
 import { Cpu, FolderOpen, NotebookPen, SquareTerminal } from 'lucide-react'
 import type { ReactNode } from 'react'
-import { SparkleIcon } from '@/components/logo'
+import { LogoMark } from '@/components/logo'
 
 const STEPS: { icon: ReactNode; title: string; body: string }[] = [
   {
@@ -32,8 +32,11 @@ export function Onboarding() {
       aria-label="Welcome"
       className="relative overflow-hidden rounded-[24px] border border-line bg-paper-soft p-6 md:p-8"
     >
-      <SparkleIcon className="pointer-events-none absolute -right-10 -top-10 size-48 text-ink opacity-[0.05]" />
-      <p className="text-2xl font-medium tracking-tight">Your Colab runtimes, from your desktop.</p>
+      <LogoMark className="pointer-events-none absolute -right-12 -top-10 size-64 opacity-[0.07]" />
+      <LogoMark className="size-12" />
+      <p className="chrome-text mt-5 text-3xl font-medium tracking-tight">
+        Your Colab runtimes, from your desktop.
+      </p>
       <p className="mt-2 max-w-xl text-sm leading-relaxed text-graphite">
         Connect the Google account you use for Colab above. That is the only sign-in NZAP Engine
         needs.
