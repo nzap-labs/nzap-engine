@@ -2677,7 +2677,7 @@ dependencies = [
 name = "nzap-core"
 version = "0.1.0"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.1",
  "chrono",
  "futures-util",
  "keyring",
@@ -2728,7 +2728,7 @@ name = "nzap-mock-colab"
 version = "0.1.0"
 dependencies = [
  "axum",
- "base64 0.22.1",
+ "base64 0.23.1",
  "serde",
  "serde_json",
  "sha2",
