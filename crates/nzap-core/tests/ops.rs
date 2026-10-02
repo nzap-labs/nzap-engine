@@ -345,7 +345,10 @@ async fn catalog_refresh_integrity_and_running_notebooks() {
             .static_files
             .insert("catalog/notebooks/extra-one/notebook.py".into(), "print(2)\n".into());
     }
-    assert_eq!(library.catalog().refresh().await.count, 6);
+    assert_eq!(
+        library.catalog().refresh().await.count,
+        bundle["notebooks"].as_array().unwrap().len() + 1
+    );
     let tampered = library.get("public:extra-one").await.unwrap_err();
     assert!(tampered.to_string().contains("integrity"), "{tampered}");
 
