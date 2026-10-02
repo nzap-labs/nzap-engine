@@ -590,6 +590,13 @@ export function installFakeEngine(): FakeControls {
         return null
       case 'plugin:resources|close':
         return null
+      // -- deep links: the browser build is never opened through one
+      case 'plugin:deep-link|get_current':
+        return null
+      case 'plugin:event|listen':
+        return 0
+      case 'plugin:event|unlisten':
+        return null
       case 'stream_cancel': {
         const cancel = cancels.get(String(args.streamId))
         cancel?.()

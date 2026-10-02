@@ -27,12 +27,14 @@ percent-encoding = "2"
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2.12", features = ["tray-icon"] }
+tauri-plugin-deep-link = "2.6"
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
 # Minor versions match the @tauri-apps/plugin-* npm packages (the CLI checks).
 tauri-plugin-process = "2.4"
-tauri-plugin-single-instance = "2"
+# `deep-link` forwards nzap:// links from a second launch (Windows, Linux).
+tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "2.13"
 tauri-plugin-window-state = "2"
 tokio = { workspace = true }

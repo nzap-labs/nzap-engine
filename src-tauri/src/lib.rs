@@ -112,6 +112,9 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             tray::show_main(app);
         }))
+        // nzap:// links (the website's "Open in NZAP Engine"); right after
+        // single-instance so a second launch hands its link to this one.
+        .plugin(tauri_plugin_deep_link::init())
         .plugin(log_plugin())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
@@ -137,6 +140,14 @@ pub fn run() {
             if close_to_tray {
                 if let Err(error) = tray::ensure(app.handle()) {
                     log::warn!("No system tray available: {error}");
+                }
+            }
+            // Installers register nzap:// themselves; this covers AppImage and dev builds.
+            #[cfg(any(windows, target_os = "linux"))]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                if let Err(error) = app.deep_link().register_all() {
+                    log::warn!("Could not register nzap:// links: {error}");
                 }
             }
             log::info!("NZAP Engine {} started", nzap_core::VERSION);
