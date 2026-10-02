@@ -118,7 +118,7 @@ jobs:
           args: ${{ matrix.args }} ${{ env.HAS_UPDATER_KEY == 'true' && '--config src-tauri/tauri.updater.conf.json' || '' }}
 
       # Build-only runs keep the installers as workflow artifacts for testing.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: github.ref_type != 'tag'
         with:
           name: installers-${{ runner.os }}
