@@ -27,3 +27,4 @@ Thumbs.db
 
 # desktop E2E diagnostics
 e2e/desktop/artifacts/
+e2e/capture/out/

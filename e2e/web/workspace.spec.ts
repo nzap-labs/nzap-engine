@@ -9,7 +9,7 @@ test.describe('Terminal, files, run and jobs', () => {
   test('a shell on the runtime', async ({ page }) => {
     await page.getByRole('tab', { name: 'Terminal' }).click()
     const terminal = page.getByRole('region', { name: 'Terminal' })
-    await expect(terminal.getByText('root@fake:/content#').first()).toBeVisible()
+    await expect(terminal.getByText('root@colab:/content#').first()).toBeVisible()
     await page.locator('.xterm-helper-textarea').pressSequentially('whoami')
     await page.locator('.xterm-helper-textarea').press('Enter')
     await expect(terminal.getByText(/^root$/)).toBeVisible()

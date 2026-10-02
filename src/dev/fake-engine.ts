@@ -894,7 +894,7 @@ export function installFakeEngine(): FakeControls {
           () =>
             channel.onmessage({
               type: 'frame',
-              data: JSON.stringify({ data: 'Welcome to the fake runtime\r\nroot@fake:/content# ' }),
+              data: JSON.stringify({ data: `Connected to ${target.name}\r\n${PROMPT}` }),
             }),
           10,
         )
@@ -909,7 +909,7 @@ export function installFakeEngine(): FakeControls {
         for (const char of frame.data) {
           if (char === '\r' || char === '\n') {
             const command = terminal.line.trim()
-            output += `\r\n${command === 'whoami' ? 'root\r\n' : command === 'pwd' ? '/content\r\n' : command ? `sh: 1: ${command}: not found\r\n` : ''}root@fake:/content# `
+            output += `\r\n${shell(command)}${PROMPT}`
             terminal.line = ''
           } else if (char === '\u007f') {
             if (terminal.line) {
@@ -1388,6 +1388,30 @@ export function installFakeEngine(): FakeControls {
     handle(cmd, (args ?? {}) as Json, options)
   console.info('[nzap] Running against the simulated engine (window.__NZAP_FAKE__).')
   return controls
+}
+
+const PROMPT = 'root@colab:/content# '
+
+/** Answers for the commands people try first in a runtime's shell. */
+function shell(command: string): string {
+  const lines: Record<string, string[]> = {
+    whoami: ['root'],
+    pwd: ['/content'],
+    ls: ['nzap  sample_data'],
+    'python --version': ['Python 3.13.15'],
+    'nvidia-smi': [
+      '+-----------------------------------------------------------------------------+',
+      '| NVIDIA-SMI 580.82       Driver Version: 580.82       CUDA Version: 13.0     |',
+      '|-------------------------------+----------------------+----------------------+',
+      '| GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |',
+      '|   0  Tesla T4            Off  | 00000000:00:04.0 Off |                    0 |',
+      '| N/A   41C    P8     9W /  70W |   1203MiB / 15360MiB |      0%      Default |',
+      '+-------------------------------+----------------------+----------------------+',
+    ],
+  }
+  if (!command) return ''
+  const answer = lines[command] ?? [`sh: 1: ${command.split(' ')[0]}: not found`]
+  return answer.map((line) => `${line}\r\n`).join('')
 }
 
 /**
