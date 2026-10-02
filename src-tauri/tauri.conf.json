@@ -59,11 +59,15 @@
     "linux": {
       "deb": {
         "section": "devel",
-        "depends": ["libayatana-appindicator3-1"]
+        "depends": [
+          "libayatana-appindicator3-1"
+        ]
       },
       "rpm": {
         "release": "1",
-        "depends": ["libayatana-appindicator-gtk3"]
+        "depends": [
+          "libayatana-appindicator-gtk3"
+        ]
       },
       "appimage": {
         "bundleMediaFramework": false
@@ -80,6 +84,18 @@
       "webviewInstallMode": {
         "type": "downloadBootstrapper",
         "silent": true
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEMzNDk3ODBCNEJGNTczQzIKUldUQ2MvVkxDM2hKdzY3aWR0S3dIWmQzZGlxbGZWeHZSUUp3RStLWDFqaVQ5VHlYVTdIcWFxckQK",
+      "endpoints": [
+        "https://github.com/nzap-labs/nzap-engine-releases/releases/latest/download/latest.json",
+        "https://github.com/nzap-labs/nzap-engine/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
       }
     }
   }

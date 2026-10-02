@@ -2,7 +2,15 @@ name: Release
 
 # Push a tag like v0.1.0 to build installers for every platform and attach
 # them to a draft GitHub Release. Publish the draft once it looks right.
-# Changes to the packaging on a working branch get a build-only run (no release).
+# Changes to the packaging on a working branch get a Linux-only build-only run
+# (no release), which keeps macOS minutes for real releases.
+#
+# Optional configuration (docs/RELEASING.md):
+# - secrets TAURI_SIGNING_PRIVATE_KEY (+ _PASSWORD): sign updater bundles and
+#   publish latest.json, so installed apps can update themselves;
+# - variable RELEASES_REPO (owner/name) + secret RELEASES_TOKEN: publish the
+#   release to that public repository instead (the app's first update feed
+#   while this repository is private).
 on:
   push:
     tags: ['v*']
@@ -22,21 +30,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: macOS (universal)
-            os: macos-latest
-            args: --target universal-apple-darwin
-          - name: Linux
-            os: ubuntu-22.04
-            args: ''
-          - name: Windows
-            os: windows-latest
-            args: ''
+        include: ${{ fromJSON((github.ref_type == 'tag' || github.event_name == 'workflow_dispatch') && '[{"name":"macOS (universal)","os":"macos-latest","args":"--target universal-apple-darwin"},{"name":"Linux","os":"ubuntu-22.04","args":""},{"name":"Windows","os":"windows-latest","args":""}]' || '[{"name":"Linux","os":"ubuntu-22.04","args":""}]') }}
     runs-on: ${{ matrix.os }}
     env:
       # Signing is optional: each step below runs only when its secrets exist.
       HAS_APPLE_SIGNING: ${{ secrets.APPLE_CERTIFICATE != '' }}
       HAS_APPLE_NOTARY: ${{ secrets.APPLE_ID != '' }}
+      HAS_UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY != '' }}
+      RELEASES_REPO: ${{ vars.RELEASES_REPO }}
     steps:
       - uses: actions/checkout@v4
 
@@ -60,6 +61,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+
+      - name: Release repository name
+        if: env.RELEASES_REPO != ''
+        shell: bash
+        run: |
+          echo "RELEASES_REPO_OWNER=${RELEASES_REPO%%/*}" >> "$GITHUB_ENV"
+          echo "RELEASES_REPO_NAME=${RELEASES_REPO#*/}" >> "$GITHUB_ENV"
 
       - name: Configure macOS code signing
         if: runner.os == 'macOS' && env.HAS_APPLE_SIGNING == 'true'
@@ -89,16 +97,25 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # A token for the public releases repository when one is configured.
+          GITHUB_TOKEN: ${{ (vars.RELEASES_REPO != '' && github.ref_type == 'tag') && secrets.RELEASES_TOKEN || secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
           releaseName: 'NZAP Engine ${{ github.ref_name }}'
           releaseBody: |
-            Installers for Windows (.msi / setup .exe), macOS (.dmg, universal) and Linux (.AppImage / .deb / .rpm).
+            Installers for Windows (setup .exe / .msi), macOS (.dmg, universal) and Linux (.AppImage / .deb / .rpm).
+            Already installed? NZAP Engine updates itself: Settings → Updates.
             See docs/INSTALL.md for first-launch notes on unsigned builds.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          args: ${{ matrix.args }}
+          owner: ${{ (env.RELEASES_REPO != '' && github.ref_type == 'tag') && env.RELEASES_REPO_OWNER || '' }}
+          repo: ${{ (env.RELEASES_REPO != '' && github.ref_type == 'tag') && env.RELEASES_REPO_NAME || '' }}
+          includeUpdaterJson: ${{ env.HAS_UPDATER_KEY == 'true' }}
+          updaterJsonPreferNsis: true
+          # Updater bundles (.sig + latest.json) need the signing key.
+          args: ${{ matrix.args }} ${{ env.HAS_UPDATER_KEY == 'true' && '--config src-tauri/tauri.updater.conf.json' || '' }}
 
       # Build-only runs keep the installers as workflow artifacts for testing.
       - uses: actions/upload-artifact@v4

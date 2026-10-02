@@ -116,6 +116,9 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        // In-app updates: signed bundles from the release feed (see docs/RELEASING.md).
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .on_window_event(tray::on_window_event)
         .on_page_load(|webview, payload| {
             startup_mark(&format!(

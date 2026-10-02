@@ -30,7 +30,10 @@ tauri = { version = "2.12", features = ["tray-icon"] }
 tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 tauri-plugin-opener = "2"
+# Minor versions match the @tauri-apps/plugin-* npm packages (the CLI checks).
+tauri-plugin-process = "2.4"
 tauri-plugin-single-instance = "2"
+tauri-plugin-updater = "2.13"
 tauri-plugin-window-state = "2"
 tokio = { workspace = true }
 url = "2"

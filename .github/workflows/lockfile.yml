@@ -1,0 +1,27 @@
+name: Lockfile
+
+# There is no local Rust toolchain on the maintainer machine (CI is the
+# compiler), so dependency changes get their Cargo.lock here: push the
+# Cargo.toml change to a `lockfile/*` branch and download the artifact.
+on:
+  push:
+    branches: ['lockfile/**']
+
+permissions:
+  contents: read
+
+jobs:
+  lock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      # Resolve only what changed: existing pins stay as they are.
+      - run: cargo fetch
+      - run: cargo tree -p nzap-engine --depth 1 -e normal | grep -i tauri || true
+      - run: git diff --stat Cargo.lock
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cargo-lock
+          path: Cargo.lock
+          retention-days: 3
