@@ -12,8 +12,8 @@ export function SparkleIcon({ className }: { className?: string }) {
 }
 
 /**
- * The NZAP Labs "NZ" ribbon. The dark rendition carries the edge highlights
- * that keep the black chrome readable on a dark stage.
+ * The NZAP Labs "NZ" ribbon: black chrome on light themes, silver chrome
+ * (with its own soft glow) on dark ones.
  */
 export function LogoMark({ className }: { className?: string }) {
   return (
@@ -30,7 +30,7 @@ export function LogoMark({ className }: { className?: string }) {
         alt=""
         aria-hidden
         draggable={false}
-        className="hidden size-full object-contain drop-shadow-[0_0_12px_rgba(255,255,255,0.28)] dark:block"
+        className="hidden size-full object-contain drop-shadow-[0_0_10px_rgba(255,255,255,0.12)] dark:block"
       />
     </span>
   )
