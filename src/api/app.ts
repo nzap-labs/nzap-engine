@@ -30,6 +30,22 @@ export const appInfoQuery = queryOptions({
   staleTime: Infinity,
 })
 
+/** How to connect an AI agent to this installation over MCP. */
+export interface McpInfo {
+  command: string
+  args: string[]
+  /** One line that adds NZAP Engine to Claude Code. */
+  claudeCode: string
+  /** `mcpServers` JSON for Claude Desktop, Cursor and other clients. */
+  configJson: string
+}
+
+export const mcpInfoQuery = queryOptions({
+  queryKey: ['app', 'mcp'],
+  queryFn: () => call<McpInfo>('mcp_info'),
+  staleTime: Infinity,
+})
+
 export const settingsQuery = queryOptions({
   queryKey: ['app', 'settings'],
   queryFn: () => call<SettingsView>('settings_get'),

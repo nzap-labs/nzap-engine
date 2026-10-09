@@ -78,6 +78,11 @@ test.describe('Account and settings', () => {
     await expect(page.getByText('Settings saved.')).toBeVisible()
     expect(await fake(page, (state) => state.settings.keepAliveIntervalSeconds)).toBe(120)
 
+    // AI agents get a ready-to-paste MCP command for this installation.
+    const agents = page.getByRole('region', { name: 'AI agents (MCP)' })
+    await expect(agents.getByText(/^claude mcp add --scope user nzap -- /)).toBeVisible()
+    await expect(agents.getByText(/"mcpServers"/)).toBeVisible()
+
     // Changing the OAuth client needs Google disconnected first.
     const client = page.getByRole('region', { name: 'Google OAuth client' })
     await client.getByLabel('OAuth client JSON').fill('{"installed": {"client_id": "mine"}}')

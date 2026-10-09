@@ -162,6 +162,34 @@ async fn revoked_grant_is_reported_and_remembered() {
     assert_eq!(restarted.snapshot().await.reason, None);
 }
 
+/// The app and an agent server (`nzap-engine mcp`) share one stored token.
+#[tokio::test]
+async fn processes_sharing_the_stored_connection() {
+    let harness = Harness::new().await;
+    let agent = harness.manager();
+    assert!(matches!(agent.access_token().await, Err(Error::NotConnected)));
+
+    // The app connects while the agent server runs; the agent picks it up.
+    let app = harness.manager();
+    sign_in(&app).await;
+    agent.reload().await;
+    assert!(agent.snapshot().await.has_credentials);
+    assert_eq!(agent.user().await.map(|user| user.email).as_deref(), Some("ada@example.com"));
+    agent.access_token().await.unwrap();
+
+    // The app reconnects (a new grant) and the old one dies. The agent,
+    // still holding the old token, switches to the stored one instead of
+    // deleting it.
+    let old = harness.store.get("google-refresh-token").unwrap().unwrap();
+    sign_in(&app).await;
+    let new = harness.store.get("google-refresh-token").unwrap().unwrap();
+    assert_ne!(old, new);
+    harness.mock.state().refresh_tokens.remove(&old);
+    agent.force_refresh().await.unwrap();
+    assert_eq!(harness.store.get("google-refresh-token").unwrap(), Some(new));
+    assert!(agent.snapshot().await.has_credentials);
+}
+
 #[tokio::test]
 async fn disconnect_revokes_and_forgets() {
     let harness = Harness::new().await;

@@ -300,48 +300,98 @@ impl AuthManager {
     }
 
     async fn refresh_locked(&self, state: &mut TokenState) -> Result<String> {
-        let Some(refresh_token) = state.refresh_token.clone() else {
+        if state.refresh_token.is_none() {
+            self.reload_stored(state);
+        }
+        let Some(mut refresh_token) = state.refresh_token.clone() else {
             return Err(if state.identity.user.is_some() {
                 Error::AuthExpired("Your Google connection was revoked. Connect again.".to_owned())
             } else {
                 Error::NotConnected
             });
         };
-        match oauth::refresh(
-            &self.http,
-            &self.endpoints.token_uri,
-            &self.oauth_client(),
-            &refresh_token,
-        )
-        .await
-        {
-            Ok(tokens) => {
-                // Google may rotate the refresh token; keep whichever is newest.
-                if let Some(rotated) = tokens.refresh_token.as_deref() {
-                    if rotated != refresh_token {
-                        self.secrets.set(REFRESH_TOKEN_KEY, rotated)?;
-                        state.refresh_token = Some(rotated.to_owned());
+        let mut retried = false;
+        loop {
+            match oauth::refresh(
+                &self.http,
+                &self.endpoints.token_uri,
+                &self.oauth_client(),
+                &refresh_token,
+            )
+            .await
+            {
+                Ok(tokens) => {
+                    // Google may rotate the refresh token; keep whichever is newest.
+                    if let Some(rotated) = tokens.refresh_token.as_deref() {
+                        if rotated != refresh_token {
+                            self.secrets.set(REFRESH_TOKEN_KEY, rotated)?;
+                            state.refresh_token = Some(rotated.to_owned());
+                        }
                     }
+                    let access = access_from(&tokens);
+                    let token = access.token.clone();
+                    state.access = Some(access);
+                    tracing::debug!("Refreshed the Google access token");
+                    return Ok(token);
                 }
-                let access = access_from(&tokens);
-                let token = access.token.clone();
-                state.access = Some(access);
-                tracing::debug!("Refreshed the Google access token");
-                Ok(token)
-            }
-            Err(error @ Error::AuthExpired(_)) => {
-                // The grant is dead: forget it, remember who it was for.
-                state.refresh_token = None;
-                state.access = None;
-                state.identity.revoked = true;
-                if let Err(delete) = self.secrets.delete(REFRESH_TOKEN_KEY) {
-                    tracing::warn!("Could not remove the revoked token: {delete}");
+                Err(error @ Error::AuthExpired(_)) => {
+                    // Another NZAP process (the app, or an agent server) may
+                    // have reconnected since this one loaded its token: use
+                    // the stored one rather than deleting it.
+                    if let Some(stored) =
+                        self.stored_token().filter(|stored| *stored != refresh_token)
+                    {
+                        if !retried {
+                            retried = true;
+                            refresh_token = stored.clone();
+                            state.refresh_token = Some(stored);
+                            state.access = None;
+                            continue;
+                        }
+                    }
+                    // The grant is dead: forget it, remember who it was for.
+                    state.refresh_token = None;
+                    state.access = None;
+                    state.identity.revoked = true;
+                    if self.stored_token().as_deref() == Some(refresh_token.as_str()) {
+                        if let Err(delete) = self.secrets.delete(REFRESH_TOKEN_KEY) {
+                            tracing::warn!("Could not remove the revoked token: {delete}");
+                        }
+                    }
+                    self.save_identity(&state.identity);
+                    return Err(error);
                 }
-                self.save_identity(&state.identity);
-                Err(error)
+                Err(error) => return Err(error),
             }
-            Err(error) => Err(error),
         }
+    }
+
+    /// Pick up a connection another NZAP process made (the app connecting
+    /// while an agent server runs). A no-op while this one holds a token.
+    pub async fn reload(&self) {
+        let mut state = self.state.lock().await;
+        if state.refresh_token.is_none() {
+            self.reload_stored(&mut state);
+        }
+    }
+
+    fn reload_stored(&self, state: &mut TokenState) {
+        let Some(token) = self.stored_token() else { return };
+        state.refresh_token = Some(token);
+        state.access = None;
+        if let Some(identity) = std::fs::read_to_string(&self.identity_path)
+            .ok()
+            .and_then(|text| serde_json::from_str::<Identity>(&text).ok())
+        {
+            state.identity = identity;
+        }
+    }
+
+    fn stored_token(&self) -> Option<String> {
+        self.secrets.get(REFRESH_TOKEN_KEY).unwrap_or_else(|error| {
+            tracing::warn!("Could not read the stored Google connection: {error}");
+            None
+        })
     }
 
     /// Re-read the Google profile (name / picture changes).

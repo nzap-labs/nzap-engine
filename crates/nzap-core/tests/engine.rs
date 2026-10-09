@@ -15,6 +15,7 @@ fn engine(mock: &MockGoogle, root: &std::path::Path) -> Engine {
         endpoints: Endpoints::single_host(&mock.base_url),
         use_keychain: false,
         oauth_client: Some(OAuthClient { client_id: "test-client".into(), client_secret: None }),
+        sessions_file: None,
     })
     .unwrap()
 }
@@ -96,6 +97,7 @@ async fn a_stopped_colab_is_a_warning_not_a_disconnect() {
         },
         use_keychain: false,
         oauth_client: Some(OAuthClient { client_id: "test-client".into(), client_secret: None }),
+        sessions_file: None,
     })
     .unwrap();
     let status = offline.status().await;

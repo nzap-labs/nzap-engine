@@ -19,6 +19,13 @@ use crate::config::{
 };
 use crate::error::{Error, Result};
 
+/// Uploads larger than this go in chunks (Jupyter's `chunk` protocol, which
+/// JupyterLab uses for large files), so no single request carries the file.
+pub const UPLOAD_CHUNK_BYTES: usize = 8 * 1024 * 1024;
+
+/// File transfers may take longer than an ordinary request.
+const TRANSFER_TIMEOUT: Duration = Duration::from_secs(600);
+
 /// Python's `quote(path, safe='/')` for contents paths.
 const QUOTE_PATH: &percent_encoding::AsciiSet = &QUOTE_SAFE_NONE.remove(b'/');
 
@@ -146,7 +153,15 @@ impl RuntimeProxy {
     /// The file's bytes (colab-cli `ContentsClient.download`): the model's
     /// `content`, base64-decoded for binary files, pretty JSON for notebooks.
     pub async fn download(&self, path: &str) -> Result<Vec<u8>> {
-        let model = self.read_file(path).await?;
+        let (model, _) = self
+            .request(
+                Method::GET,
+                &Self::contents_path(path),
+                &[("content", "1")],
+                None,
+                TRANSFER_TIMEOUT,
+            )
+            .await?;
         if !model.is_object() {
             return Err(Error::runtime(None, format!("Unexpected contents response for {path}")));
         }
@@ -182,8 +197,28 @@ impl RuntimeProxy {
         .await
     }
 
+    /// Upload bytes as a base64 file; large files go in numbered chunks
+    /// (`1`, `2`, …, `-1` for the last), which Jupyter appends in order.
     pub async fn upload_file(&self, path: &str, data: &[u8]) -> Result<Value> {
-        self.write_file(path, &STANDARD.encode(data), "base64").await
+        if data.len() <= UPLOAD_CHUNK_BYTES {
+            return self.write_file(path, &STANDARD.encode(data), "base64").await;
+        }
+        let chunks: Vec<&[u8]> = data.chunks(UPLOAD_CHUNK_BYTES).collect();
+        let mut info = Value::Null;
+        for (index, chunk) in chunks.iter().enumerate() {
+            let number = if index + 1 == chunks.len() { -1 } else { index as i64 + 1 };
+            let body = json!({
+                "type": "file",
+                "format": "base64",
+                "content": STANDARD.encode(chunk),
+                "chunk": number,
+            });
+            info = self
+                .request(Method::PUT, &Self::contents_path(path), &[], Some(body), TRANSFER_TIMEOUT)
+                .await?
+                .0;
+        }
+        Ok(info)
     }
 
     pub async fn make_directory(&self, path: &str) -> Result<Value> {

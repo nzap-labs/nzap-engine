@@ -76,6 +76,15 @@ on at least one OS per release and on all three for major changes.
 - [ ] Run a public notebook with parameters.
 - [ ] Fork it, edit it, run your copy, export it, delete it, import the export.
 
+**AI agents (MCP)**
+
+- [ ] Settings → AI agents: paste the Claude Code line; `claude mcp list` shows `nzap` connected (macOS, Windows, Linux AppImage and .deb).
+- [ ] Ask Claude Code to "use NZAP to extract the audio from a video" in a project: `run_job` uploads it, returns an MP3 in `nzap-output/`, and the VM is released.
+- [ ] Upload a file over 8 MB (chunked) and download it back byte for byte.
+- [ ] `run_app kokoro-tts` twice: the second run reuses the warm runtime.
+- [ ] Quit Claude Code with a runtime the agent started: it is released at colab.research.google.com.
+- [ ] Connect Google in the app while an agent is running: the agent's next `status` shows connected.
+
 **App**
 
 - [ ] Close-to-tray: closing hides the window, the tray brings it back, and **Quit** exits.

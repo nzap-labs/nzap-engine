@@ -956,6 +956,18 @@ impl SessionManager {
         Ok(info)
     }
 
+    /// Create the folders above `path`. Folders that exist are left alone,
+    /// and a real failure surfaces when the file itself is written.
+    pub async fn make_parents(&self, name: &str, path: &str) {
+        let Ok(proxy) = self.proxy(name) else { return };
+        let parts: Vec<&str> = path.trim_matches('/').split('/').collect();
+        for depth in 1..parts.len() {
+            if let Err(error) = proxy.make_directory(&parts[..depth].join("/")).await {
+                tracing::debug!("mkdir {} failed: {error}", parts[..depth].join("/"));
+            }
+        }
+    }
+
     pub async fn make_directory(&self, name: &str, path: &str) -> Result<Value> {
         let path = require_path(path)?;
         let info = self.proxy(name)?.make_directory(path).await?;

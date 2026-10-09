@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { FolderOpen, RotateCcw, Save } from 'lucide-react'
+import { Check, Copy, FolderOpen, RotateCcw, Save } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   appInfoQuery,
+  mcpInfoQuery,
   openLogFolder,
   settingsQuery,
   useSetOAuthClient,
@@ -19,7 +20,7 @@ import { UpdatesCard } from '@/features/updates/updates-card'
 import { PageHeader } from '@/features/shell/page-header'
 import { errorMessage } from '@/lib/ipc'
 
-/** Engine settings: keep-alive, the notebook catalog, artifacts, OAuth client. */
+/** Engine settings: keep-alive, the notebook catalog, artifacts, AI agents, OAuth client. */
 export function SettingsPage() {
   const { data: view } = useQuery(settingsQuery)
   if (!view) {
@@ -169,6 +170,8 @@ function SettingsForm({ view }: { view: SettingsView }) {
             </form>
           </Card>
 
+          <AgentsCard />
+
           <Card
             title="Google OAuth client"
             description="NZAP Engine signs in with the installed-app client that Google's own Colab CLI uses. You can use your own Desktop OAuth client instead — disconnect Google first."
@@ -260,6 +263,75 @@ function SettingsForm({ view }: { view: SettingsView }) {
           </Card>
         </div>
       </div>
+    </div>
+  )
+}
+
+/** How to let an AI agent (Claude Code, Claude Desktop, Cursor…) use this engine. */
+function AgentsCard() {
+  const { data: mcp, error } = useQuery(mcpInfoQuery)
+  return (
+    <Card
+      title="AI agents (MCP)"
+      description="Let Claude Code, Claude Desktop, Cursor and other MCP clients start runtimes, run code and process files on your Colab account — speech to text, ffmpeg, AI apps — with nothing installed locally. Agents use this app's Google connection; the app does not need to stay open."
+    >
+      {mcp ? (
+        <div className="space-y-4">
+          <CopyBlock label="Claude Code" text={mcp.claudeCode} />
+          <CopyBlock label="Other clients (mcpServers JSON)" text={mcp.configJson} />
+          <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-graphite">
+            <li>
+              Runtimes an agent starts use compute units until they stop, and are released when the
+              agent disconnects. Each agent holds at most 2 at once (
+              <code className="font-mono text-xs">--max-runtimes</code>).
+            </li>
+            <li>
+              Agents read and write local files only inside the folder they run in (add{' '}
+              <code className="font-mono text-xs">--allow-dir &lt;folder&gt;</code> to share more).
+            </li>
+          </ul>
+          <ExternalLink
+            href="https://github.com/nzap-labs/nzap-engine/blob/main/docs/MCP.md"
+            className="text-sm font-medium underline underline-offset-4"
+          >
+            Tools, options and examples
+          </ExternalLink>
+        </div>
+      ) : (
+        <p className="text-sm text-graphite">
+          {error ? errorMessage(error, 'Could not find the app executable.') : 'Loading…'}
+        </p>
+      )}
+    </Card>
+  )
+}
+
+function CopyBlock({ label, text }: { label: string; text: string }) {
+  const [copied, setCopied] = useState(false)
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      toast.success(`${label} configuration copied.`)
+      window.setTimeout(() => setCopied(false), 2000)
+    } catch {
+      toast.error('Could not copy. Select the text and copy it instead.')
+    }
+  }
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs font-medium uppercase tracking-[0.14em] text-graphite">
+          {label}
+        </span>
+        <Button variant="ghost" size="sm" onClick={() => void copy()} aria-label={`Copy ${label}`}>
+          {copied ? <Check className="size-4" /> : <Copy className="size-4" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
+      </div>
+      <pre className="scrollbar-thin mt-1.5 overflow-x-auto whitespace-pre rounded-2xl border border-line bg-paper-soft p-3 font-mono text-xs">
+        {text}
+      </pre>
     </div>
   )
 }

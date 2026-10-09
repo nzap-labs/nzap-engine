@@ -2,6 +2,7 @@
 //! plus the few operations that span them (connection status, account,
 //! disconnect, settings).
 
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -26,6 +27,10 @@ pub struct EngineOptions {
     pub use_keychain: bool,
     /// Overrides `oauth-client.json` (the `NZAP_OAUTH_CLIENT_JSON` variable).
     pub oauth_client: Option<OAuthClient>,
+    /// Where runtimes are persisted instead of `sessions.json`. An agent
+    /// server (`nzap-engine mcp`) keeps its own list, so it never overwrites
+    /// the app's while both run.
+    pub sessions_file: Option<PathBuf>,
 }
 
 /// The Google Auth card's state — hosted NZAP's `/api/colab/status`.
@@ -106,7 +111,7 @@ impl Engine {
         let sessions = SessionManager::new(
             colab.clone(),
             Arc::new(HistoryLog::new(paths.history_dir())),
-            paths.sessions_file(),
+            options.sessions_file.unwrap_or_else(|| paths.sessions_file()),
         );
         sessions.set_keepalive(
             current.keep_alive,
