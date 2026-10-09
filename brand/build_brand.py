@@ -1,12 +1,15 @@
 """Build NZAP brand assets from the source logos.
 
-Sources (transparent PNGs, 1536x1024): light.png (black chrome, for light
-backgrounds) and dark.png (chrome with bright edge highlights, for dark ones).
+Sources (1536x1024): light.png (black chrome, for light backgrounds) and
+dark.png (chrome with bright edge highlights, for dark ones), both
+transparent, plus dark-silver.webp (silver chrome on solid black), the
+in-app mark of the dark theme.
 """
 
 import sys
 from pathlib import Path
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 
 SRC = Path(sys.argv[1])
@@ -25,6 +28,21 @@ def solid_alpha(image, threshold=24):
 
 
 light, dark = solid_alpha(light), solid_alpha(dark)
+
+
+def from_black(image, floor=6):
+    """Un-blend artwork rendered on solid black: alpha is the brightest
+    channel and colour is divided by it, so the result composited over black
+    is the original, and its glow fades into any dark stage."""
+    rgb = np.asarray(image.convert("RGB")).astype(np.float64)
+    peak = rgb.max(axis=2)
+    alpha = np.clip((peak - floor) / (255 - floor), 0, 1)
+    colour = np.where(peak[..., None] > 0, rgb * 255 / np.maximum(peak, 1)[..., None], 0)
+    out = np.dstack([np.clip(colour, 0, 255), alpha * 255]).round().astype(np.uint8)
+    return Image.fromarray(out, "RGBA")
+
+
+silver = solid_alpha(from_black(Image.open(SRC / "dark-silver.webp")))
 
 
 def split_rows(image):
@@ -65,6 +83,8 @@ def square(image, size, fill=0.86):
 
 mark_light = trim(light.crop((0, 0, light.width, mark_bottom)))
 mark_dark = trim(dark.crop((0, 0, dark.width, mark_bottom)))
+silver_bottom, _ = split_rows(silver)
+mark_silver = trim(silver.crop((0, 0, silver.width, silver_bottom)))
 full_light = trim(light)
 full_dark = trim(dark)
 
@@ -145,8 +165,9 @@ og.convert("RGB").save(OUT / "og-card.png", optimize=True)
 
 print("wrote", sorted(p.name for p in OUT.iterdir()))
 
-# Small sizes for in-app use (2x of the largest rendering).
-for name, mark in (("light", mark_light), ("dark", mark_dark)):
+# Small sizes for in-app use (2x of the largest rendering). The dark theme
+# uses the silver mark; the app icon keeps the dark chrome one.
+for name, mark in (("light", mark_light), ("dark", mark_silver)):
     square(mark, 160, fill=0.94).save(OUT / f"nzap-mark-{name}-160.png", optimize=True)
 favicon(64).save(OUT / "favicon-64.png", optimize=True)
 print("small sizes done")
