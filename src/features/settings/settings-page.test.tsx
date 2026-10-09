@@ -32,6 +32,20 @@ describe('SettingsPage', () => {
     await waitFor(() => expect(engine.state.settings.keepAlive).toBe(!wasOn))
   })
 
+  it('shows how to connect an AI agent and copies it', async () => {
+    const { user } = renderWithEngine(<SettingsPage />)
+    expect(await screen.findByRole('region', { name: 'AI agents (MCP)' })).toBeVisible()
+    const command =
+      "claude mcp add --scope user nzap -- '/Applications/NZAP Engine.app/Contents/MacOS/nzap-engine' mcp"
+    expect(await screen.findByText(command)).toBeVisible()
+    expect(screen.getByText(/"mcpServers"/)).toBeVisible()
+
+    await user.click(screen.getByRole('button', { name: 'Copy Claude Code' }))
+    // user-event provides the clipboard.
+    expect(await navigator.clipboard.readText()).toBe(command)
+    expect(await screen.findByText('Claude Code configuration copied.')).toBeInTheDocument()
+  })
+
   it('rejects a catalog URL that is not https', async () => {
     const { user, engine } = renderWithEngine(<SettingsPage />)
     const field = await screen.findByRole('textbox', { name: 'Catalog URL' })

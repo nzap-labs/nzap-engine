@@ -1,10 +1,12 @@
-//! App-level commands: info, settings, external links, stream cancellation.
+//! App-level commands: info, settings, external links, stream cancellation,
+//! and how to connect an AI agent (MCP).
 
 use nzap_core::auth::OAuthClient;
 use nzap_core::engine::HardwareConfig;
 use nzap_core::settings::{Settings, SettingsPatch};
 use nzap_core::Error;
 use serde::Serialize;
+use serde_json::json;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_opener::OpenerExt;
 
@@ -144,9 +146,96 @@ pub async fn settings_set_oauth_client(
     Ok(settings_view(&state))
 }
 
+/// How to connect an AI agent to this installation (Settings → AI agents).
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpInfo {
+    /// The executable an agent launches, with `args`.
+    pub command: String,
+    pub args: Vec<&'static str>,
+    /// One line that adds NZAP Engine to Claude Code for every project.
+    pub claude_code: String,
+    /// `mcpServers` JSON for Claude Desktop, Cursor and other clients.
+    pub config_json: String,
+}
+
+/// The installed executable. An AppImage runs from a temporary mount, so
+/// agents must launch the AppImage file itself.
+fn executable() -> nzap_core::Result<std::path::PathBuf> {
+    if let Some(appimage) = std::env::var_os("APPIMAGE").filter(|path| !path.is_empty()) {
+        return Ok(appimage.into());
+    }
+    std::env::current_exe()
+        .map_err(|error| Error::Io(format!("Cannot find the app's executable: {error}")))
+}
+
+/// Quote a path for the user's shell: double quotes on Windows (cmd and
+/// PowerShell), single quotes elsewhere.
+pub fn shell_quote(text: &str, windows: bool) -> String {
+    if text.chars().all(|c| c.is_ascii_alphanumeric() || "/\\._-:".contains(c)) {
+        text.to_owned()
+    } else if windows {
+        format!("\"{text}\"")
+    } else {
+        format!("'{}'", text.replace('\'', "'\\''"))
+    }
+}
+
+pub fn mcp_info_for(executable: &str, windows: bool) -> McpInfo {
+    let config = json!({ "mcpServers": { "nzap": { "command": executable, "args": ["mcp"] } } });
+    McpInfo {
+        command: executable.to_owned(),
+        args: vec!["mcp"],
+        claude_code: format!(
+            "claude mcp add --scope user nzap -- {} mcp",
+            shell_quote(executable, windows)
+        ),
+        config_json: serde_json::to_string_pretty(&config).unwrap_or_default(),
+    }
+}
+
+#[tauri::command]
+pub fn mcp_info() -> CmdResult<McpInfo> {
+    let executable = executable()?;
+    Ok(mcp_info_for(&executable.to_string_lossy(), cfg!(windows)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn agents_get_a_command_for_their_shell() {
+        let mac = mcp_info_for("/Applications/NZAP Engine.app/Contents/MacOS/nzap-engine", false);
+        assert_eq!(
+            mac.claude_code,
+            "claude mcp add --scope user nzap -- \
+             '/Applications/NZAP Engine.app/Contents/MacOS/nzap-engine' mcp"
+        );
+        let config: serde_json::Value = serde_json::from_str(&mac.config_json).unwrap();
+        assert_eq!(config["mcpServers"]["nzap"]["args"], json!(["mcp"]));
+
+        let linux = mcp_info_for("/usr/bin/nzap-engine", false);
+        assert_eq!(
+            linux.claude_code,
+            "claude mcp add --scope user nzap -- /usr/bin/nzap-engine mcp"
+        );
+
+        let windows = mcp_info_for(r"C:\Program Files\NZAP Engine\nzap-engine.exe", true);
+        assert!(windows
+            .claude_code
+            .ends_with(r#""C:\Program Files\NZAP Engine\nzap-engine.exe" mcp"#));
+        let config: serde_json::Value = serde_json::from_str(&windows.config_json).unwrap();
+        assert_eq!(
+            config["mcpServers"]["nzap"]["command"],
+            r"C:\Program Files\NZAP Engine\nzap-engine.exe"
+        );
+
+        assert_eq!(
+            shell_quote("/home/o'neil/nzap.AppImage", false),
+            r"'/home/o'\''neil/nzap.AppImage'"
+        );
+    }
 
     #[test]
     fn only_https_leaves_the_app() {

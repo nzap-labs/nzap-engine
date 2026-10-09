@@ -92,6 +92,8 @@ fn router(state: Shared) -> Router {
         .merge(kernel::routes())
         .merge(tty::routes())
         .merge(files::routes())
+        // Uploads arrive as base64 JSON in chunks of up to 8 MiB.
+        .layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), record))
         .with_state(state)
 }

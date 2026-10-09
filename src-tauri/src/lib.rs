@@ -3,12 +3,17 @@
 //! A thin adapter between the webview and `nzap-core`: IPC commands and
 //! streaming channels, plugins, and platform integration. The engine itself
 //! lives in `crates/nzap-core` so it can be tested without a window.
+//!
+//! The same binary is also an MCP server for AI agents: `nzap-engine mcp`
+//! serves `crates/nzap-mcp` on stdin/stdout without opening a window.
 
 mod commands;
 mod state;
 mod tray;
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::time::Duration;
 
 use nzap_core::auth::OAuthClient;
 use nzap_core::config::Endpoints;
@@ -38,15 +43,8 @@ fn startup_mark(step: &str) {
     }
 }
 
-fn build_state(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
-    let paths = match dev_env("NZAP_DATA_DIR") {
-        Some(root) => AppPaths::under(Path::new(&root)),
-        None => AppPaths {
-            data_dir: app.path().app_data_dir()?,
-            config_dir: app.path().app_config_dir()?,
-            cache_dir: app.path().app_cache_dir()?,
-        },
-    };
+/// The engine's configuration, shared by the window and the MCP server.
+fn engine_options(paths: AppPaths, sessions_file: Option<PathBuf>) -> EngineOptions {
     let endpoints = if cfg!(debug_assertions) {
         Endpoints::default().with_overrides(dev_env)
     } else {
@@ -57,13 +55,89 @@ fn build_state(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> 
             .map_err(|error| log::warn!("NZAP_OAUTH_CLIENT_JSON: {error}"))
             .ok()
     });
-    let engine = Engine::new(EngineOptions {
+    EngineOptions {
         paths,
         endpoints,
         use_keychain: dev_env("NZAP_NO_KEYCHAIN").is_none(),
         oauth_client,
-    })?;
+        sessions_file,
+    }
+}
+
+fn build_state(app: &AppHandle) -> Result<AppState, Box<dyn std::error::Error>> {
+    let paths = match dev_env("NZAP_DATA_DIR") {
+        Some(root) => AppPaths::under(Path::new(&root)),
+        None => AppPaths {
+            data_dir: app.path().app_data_dir()?,
+            config_dir: app.path().app_config_dir()?,
+            cache_dir: app.path().app_cache_dir()?,
+        },
+    };
+    let engine = Engine::new(engine_options(paths, None))?;
     Ok(AppState::new(engine, dev_env("NZAP_E2E_OPEN_LOG").map(PathBuf::from)))
+}
+
+/// The app's folders without a running app: the same platform directories
+/// Tauri's path API resolves (`<data|config|cache dir>/<identifier>`).
+fn headless_paths() -> Option<AppPaths> {
+    if let Some(root) = dev_env("NZAP_DATA_DIR") {
+        return Some(AppPaths::under(Path::new(&root)));
+    }
+    let identifier = context().config().identifier.clone();
+    Some(AppPaths {
+        data_dir: dirs::data_dir()?.join(&identifier),
+        config_dir: dirs::config_dir()?.join(&identifier),
+        cache_dir: dirs::cache_dir()?.join(&identifier),
+    })
+}
+
+/// `nzap-engine mcp [options]`: serve an AI agent over stdin/stdout (see
+/// docs/MCP.md). Uses the app's Google connection and settings, keeps its
+/// own runtime list, and returns the process exit code.
+pub fn run_mcp(args: Vec<String>) -> i32 {
+    nzap_mcp::init_stderr_logger();
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+    let options = match nzap_mcp::Options::parse(args, &cwd) {
+        Ok(options) => options,
+        Err(message) => {
+            eprintln!("{message}");
+            return if message.starts_with("Usage:") { 0 } else { 2 };
+        }
+    };
+    let Some(paths) = headless_paths() else {
+        eprintln!("Cannot find this user's application data folders.");
+        return 1;
+    };
+    // One list per server process: agents may run several at once.
+    let sessions_file =
+        paths.data_dir.join("agents").join(format!("mcp-{}.json", std::process::id()));
+    let engine = match Engine::new(engine_options(paths, Some(sessions_file.clone()))) {
+        Ok(engine) => engine,
+        Err(error) => {
+            eprintln!("NZAP Engine could not start: {error}");
+            return 1;
+        }
+    };
+    let runtime = match tokio::runtime::Builder::new_multi_thread().enable_all().build() {
+        Ok(runtime) => runtime,
+        Err(error) => {
+            eprintln!("NZAP Engine could not start: {error}");
+            return 1;
+        }
+    };
+    log::info!("NZAP Engine {} serving MCP on stdio", nzap_core::VERSION);
+    let server = nzap_mcp::Server::new(Arc::new(engine), options);
+    let result = runtime.block_on(nzap_mcp::run_stdio(server));
+    let _ = std::fs::remove_file(&sessions_file);
+    // A blocking stdin read must not hold the process open.
+    runtime.shutdown_timeout(Duration::from_secs(1));
+    match result {
+        Ok(()) => 0,
+        Err(error) => {
+            log::error!("The MCP connection failed: {error}");
+            1
+        }
+    }
 }
 
 fn log_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
@@ -166,6 +240,7 @@ pub fn run() {
             commands::app::settings_get,
             commands::app::settings_update,
             commands::app::settings_set_oauth_client,
+            commands::app::mcp_info,
             commands::auth::auth_status,
             commands::auth::auth_connect,
             commands::auth::auth_cancel,

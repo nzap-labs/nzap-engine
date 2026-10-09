@@ -25,6 +25,14 @@ NZAP Engine acts with the Google account you connect. The assets it guards are:
 - **No listening server.** The UI talks to the engine over Tauri IPC, restricted
   by capabilities. The only socket is the OAuth loopback listener: bound to
   loopback, ephemeral port, one request, closed after use or after 5 minutes.
+- **AI agents over stdio.** `nzap-engine mcp` serves MCP on stdin/stdout to
+  the client that launched it, never on a port. Agents never receive Google
+  tokens. They may read and write local files only inside the folder the server
+  started in and any `--allow-dir` (checked lexically and after resolving
+  symlinks). Each agent holds at most `--max-runtimes` VMs, and the ones it
+  started are released when it disconnects. Running code on your VMs and
+  spending compute units is what the tools are for, so leave your MCP client's
+  per-call approval on unless you trust the agent. See [docs/MCP.md](./docs/MCP.md).
 - **OAuth with PKCE (S256)** and a single-use `state`.
 - **Strict CSP.** No remote scripts. The external opener only accepts `https:` URLs.
 - **Input confinement.** Session names are validated. File operations go through
@@ -45,6 +53,7 @@ NZAP Engine acts with the Google account you connect. The assets it guards are:
 - Colab's endpoints are internal APIs used by Google's own clients. They may
   change, and NZAP Engine cannot guarantee their behaviour.
 - Anyone with access to your unlocked OS user account can use the stored Google
-  connection, as with any desktop app that remembers a sign-in. Use
+  connection, as with any desktop app that remembers a sign-in. That includes
+  any program that launches `nzap-engine mcp`. Use
   **Account → Disconnect** to revoke it locally, and
   [Google account permissions](https://myaccount.google.com/permissions) to revoke it everywhere.

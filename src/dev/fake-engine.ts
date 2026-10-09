@@ -602,6 +602,15 @@ export function installFakeEngine(): FakeControls {
         cancel?.()
         return Boolean(cancel)
       }
+      case 'mcp_info': {
+        const command = '/Applications/NZAP Engine.app/Contents/MacOS/nzap-engine'
+        return {
+          command,
+          args: ['mcp'],
+          claudeCode: `claude mcp add --scope user nzap -- '${command}' mcp`,
+          configJson: JSON.stringify({ mcpServers: { nzap: { command, args: ['mcp'] } } }, null, 2),
+        }
+      }
       case 'config_get':
         return {
           gpus: ['t4', 'l4', 'g4', 'a100', 'h100'],

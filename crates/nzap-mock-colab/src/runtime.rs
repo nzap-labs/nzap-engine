@@ -216,6 +216,21 @@ async fn put_contents(
     {
         return (StatusCode::BAD_REQUEST, "a directory exists at that path").into_response();
     }
+    // Jupyter's chunked upload: chunk 1 starts the file, later chunks
+    // (2, 3, …, and -1 for the last) append to it.
+    let chunk = body.get("chunk").and_then(Value::as_i64);
+    let file = match (chunk, file) {
+        (Some(number), MockFile::Binary(bytes)) if number != 1 => match runtime.files.get(&path) {
+            Some(MockFile::Binary(existing)) => {
+                MockFile::Binary(existing.iter().chain(&bytes).copied().collect())
+            }
+            _ => return (StatusCode::BAD_REQUEST, "no upload in progress").into_response(),
+        },
+        (_, file) => file,
+    };
+    if let Some(number) = chunk {
+        runtime.upload_chunks.push(number);
+    }
     ensure_parents(runtime, &path);
     runtime.files.insert(path.clone(), file.clone());
     (StatusCode::CREATED, Json(model(runtime, &path, &file, false))).into_response()

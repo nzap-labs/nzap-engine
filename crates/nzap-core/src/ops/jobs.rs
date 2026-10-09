@@ -3,9 +3,9 @@
 //!
 //! `colab new` + `colab exec` + `colab stop` in one call: allocate a fresh
 //! VM, run a script with `python script.py ARGS…` semantics, and release the
-//! VM when it finishes (unless `keep`). Artifacts (paths or globs under
-//! `/content`) are downloaded before the VM goes away and written to a local
-//! folder the caller chooses.
+//! VM when it finishes (unless `keep`). Input files are uploaded before the
+//! script runs. Artifacts (paths or globs under `/content`) are downloaded
+//! before the VM goes away and written to a local folder the caller chooses.
 
 use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
@@ -59,6 +59,14 @@ pub struct JobRequest {
     pub name: Option<String>,
 }
 
+/// A local file a job uploads to its VM before the script runs.
+#[derive(Clone, Debug, PartialEq)]
+pub struct JobInput {
+    pub local: PathBuf,
+    /// Where it lands on the VM (absolute, or relative to `/content`).
+    pub remote: String,
+}
+
 /// A validated job.
 #[derive(Clone, Debug)]
 pub struct JobSpec {
@@ -66,10 +74,14 @@ pub struct JobSpec {
     pub script: String,
     pub args: Vec<String>,
     pub env: Vec<(String, String)>,
+    pub inputs: Vec<JobInput>,
     pub artifacts: Vec<String>,
     pub runtime: RuntimeRequest,
     pub keep: bool,
     pub timeout: Duration,
+    /// Artifacts above either limit are reported as skipped.
+    pub max_artifact_bytes: u64,
+    pub max_artifacts_total: u64,
 }
 
 pub fn plan(request: &JobRequest) -> Result<JobSpec> {
@@ -102,6 +114,7 @@ pub fn plan(request: &JobRequest) -> Result<JobSpec> {
         script: request.script.clone(),
         args: request.args.clone(),
         env: parse_env(&request.env)?,
+        inputs: Vec::new(),
         artifacts,
         runtime: RuntimeRequest {
             name,
@@ -111,7 +124,20 @@ pub fn plan(request: &JobRequest) -> Result<JobSpec> {
         },
         keep: request.keep,
         timeout: Duration::from_secs(request.timeout_seconds.unwrap_or(3600)),
+        max_artifact_bytes: MAX_ARTIFACT_BYTES,
+        max_artifacts_total: MAX_ARTIFACTS_TOTAL,
     })
+}
+
+/// A remote path as the contents API names it: absolute paths as they are,
+/// relative ones under `/content` (the job's working directory).
+pub fn remote_path(path: &str) -> String {
+    let path = path.trim();
+    if path.starts_with('/') {
+        path.to_owned()
+    } else {
+        format!("/content/{}", path.trim_start_matches("./"))
+    }
 }
 
 /// run.py `_build_script_payload`: argv, `__main__`, env, no shebang.
@@ -304,6 +330,19 @@ async fn run_on(
     let silent: Emit = Arc::new(|_| {});
     manager.execute(name, CHDIR_CONTENT, Duration::from_secs(120), false, &silent).await?;
 
+    if !spec.inputs.is_empty() {
+        emit(json!({"type": "job", "phase": "uploading", "session": name}));
+        for input in &spec.inputs {
+            let bytes = tokio::fs::read(&input.local).await.map_err(|error| {
+                Error::Io(format!("Could not read {}: {error}", input.local.display()))
+            })?;
+            let remote = remote_path(&input.remote);
+            manager.make_parents(name, &remote).await;
+            manager.upload_file(name, &remote, &bytes).await?;
+            emit(json!({"type": "input", "path": remote, "size": bytes.len()}));
+        }
+    }
+
     emit(json!({"type": "job", "phase": "running", "session": name}));
     let payload = build_script_payload(&spec.filename, &spec.script, &spec.args, &spec.env);
     // SystemExit tracebacks are suppressed, as in the CLI.
@@ -338,7 +377,7 @@ async fn run_on(
     };
     let mut total = 0u64;
     for (path, size) in found.into_iter().take(MAX_ARTIFACT_FILES) {
-        if size > MAX_ARTIFACT_BYTES || total + size > MAX_ARTIFACTS_TOTAL {
+        if size > spec.max_artifact_bytes || total + size > spec.max_artifacts_total {
             emit(json!({"type": "artifact", "path": path, "size": size, "skipped": "too large"}));
             continue;
         }
@@ -464,5 +503,12 @@ mod tests {
         assert_eq!(local_artifact_path(dir, "/tmp/x.txt"), Some(dir.join("tmp").join("x.txt")));
         assert_eq!(local_artifact_path(dir, "/content/../etc/passwd"), None);
         assert_eq!(local_artifact_path(dir, "/content/"), None);
+    }
+
+    #[test]
+    fn remote_paths_default_to_content() {
+        assert_eq!(remote_path("in/video.mp4"), "/content/in/video.mp4");
+        assert_eq!(remote_path("./a.wav"), "/content/a.wav");
+        assert_eq!(remote_path("/tmp/x"), "/tmp/x");
     }
 }

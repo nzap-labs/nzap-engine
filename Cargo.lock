@@ -2703,8 +2703,10 @@ dependencies = [
 name = "nzap-engine"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "log",
  "nzap-core",
+ "nzap-mcp",
  "percent-encoding",
  "serde",
  "serde_json",
@@ -2721,6 +2723,23 @@ dependencies = [
  "tempfile",
  "tokio",
  "url",
+]
+
+[[package]]
+name = "nzap-mcp"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "dunce",
+ "log",
+ "nzap-core",
+ "nzap-mock-colab",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "uuid",
 ]
 
 [[package]]

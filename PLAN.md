@@ -310,6 +310,15 @@ Each phase ends green in CI and with a commit and push to `main`.
 - [x] `nzap://` deep links (`apps/<id>`, `app/<slug>`, `apps`) open apps from the website; strict parsing, navigation only; single-instance forwards links to the running app
 - [x] Website (`nzap-labs/nzap-website`): live app gallery with "Open in NZAP Engine", the launch film and homepage clip rendered in CI
 
+### Phase 14 — AI agents (MCP)
+
+- [x] `crates/nzap-mcp`: MCP over stdio (JSON-RPC lines, concurrent calls, cancellation, progress), 12 tools: status, runtimes (start/attach/stop/list), `run_code`, files, `run_job` with input files, apps with warm runtimes
+- [x] `nzap-engine mcp` in the installed binary: the app's data folders and Google connection, its own runtime list, released on disconnect; shared-folder confinement for local files; runtime and file-size limits
+- [x] Engine: job input files, chunked uploads over 8 MB, longer transfer timeouts; processes sharing the keychain token pick up a newer connection instead of deleting it
+- [x] Settings → AI agents (MCP): the exact Claude Code command and `mcpServers` JSON for this installation
+- [x] Tests: protocol, tools and disconnect cleanup against the mock; the real binary driven over stdio
+- [ ] Live checklist in docs/TESTING.md (chunked uploads and Windows stdio on real Colab and clients)
+
 ## 10. Risks & open items
 
 | Risk                                                                                                                 | Mitigation                                                                                                                       |

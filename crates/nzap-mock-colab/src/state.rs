@@ -82,6 +82,8 @@ pub struct MockRuntime {
     pub executed: Vec<String>,
     pub interrupts: usize,
     pub restarts: usize,
+    /// The `chunk` numbers of chunked uploads, in arrival order.
+    pub upload_chunks: Vec<i64>,
 }
 
 impl MockRuntime {

@@ -45,6 +45,10 @@ and unsigned-build warnings.
 - **Notebooks.** A public collection hosted on GitHub
   ([nzap-labs/nzap-notebooks](https://github.com/nzap-labs/nzap-notebooks)) plus
   your own private notebooks, all with typed parameters.
+- **AI agents (MCP).** Claude Code, Claude Desktop, Cursor and other MCP
+  clients can use your runtimes: `nzap-engine mcp` lets an agent start and stop
+  VMs, run code, move files and run the apps, for example speech to text or
+  ffmpeg without installing anything locally. Settings shows the one-line setup.
 - **Compute units.** Burn rate, free time left and low-balance alerts.
 - **History.** Every cell and operation, exportable as `.ipynb`, `.md`, `.txt`
   or `.jsonl`.
@@ -57,6 +61,8 @@ NZAP Engine (one process)
 └──────────────────────────────────────────────────────┬───────────
                                         HTTPS / WSS to Google Colab,
                                         your runtimes, Drive, GitHub
+
+AI agent ──stdio (MCP)──►  nzap-engine mcp  ──►  nzap-mcp ──► nzap-core
 ```
 
 The engine is a Rust port of `colab-studio`, which speaks the same wire protocol
@@ -69,6 +75,7 @@ as Google's own `google-colab-cli` and the Colab VS Code extension.
 | [INSTALL.md](./docs/INSTALL.md)                 | installing, where data lives, uninstalling      |
 | [OAUTH.md](./docs/OAUTH.md)                     | how sign-in works, using your own OAuth client  |
 | [NOTEBOOKS.md](./docs/NOTEBOOKS.md)             | parameters, writing and contributing notebooks  |
+| [MCP.md](./docs/MCP.md)                         | connecting AI agents (Claude Code and others)   |
 | [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | common problems                                 |
 | [ARCHITECTURE.md](./docs/ARCHITECTURE.md)       | how the pieces fit, IPC conventions             |
 | [TESTING.md](./docs/TESTING.md)                 | the test suites and the live checklist          |

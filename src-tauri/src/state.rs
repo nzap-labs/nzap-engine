@@ -130,6 +130,7 @@ mod tests {
             endpoints: Endpoints::single_host("http://127.0.0.1:9"),
             use_keychain: false,
             oauth_client: None,
+            sessions_file: None,
         })
         .unwrap();
         AppState::new(engine, None)

@@ -1,17 +1,19 @@
 # Architecture
 
 NZAP Engine is one desktop process: a React UI in the system webview and a
-Rust engine behind it. There is no server, database or account system.
+Rust engine behind it. The same binary, started as `nzap-engine mcp`, serves
+that engine to AI agents. There is no server, database or account system.
 Google Colab provides the compute; GitHub hosts the public notebooks.
 
 ```
- WebView (React 19, TanStack Router + Query)
-    │  invoke(command, args)          ▲  Channel<event>  (streams)
-    ▼                                 │
- src-tauri  — thin adapter: commands/*, state.rs, tray.rs, plugins
-    │
-    ▼
- crates/nzap-core  — the engine, no Tauri dependency
+ WebView (React 19, TanStack Router + Query)       AI agent (Claude Code, Cursor…)
+    │  invoke(command, args)  ▲  Channel<event>        │  MCP: JSON-RPC lines
+    ▼                         │  (streams)             ▼  on stdin/stdout
+ src-tauri  — thin adapter: commands/*,            crates/nzap-mcp — `nzap-engine mcp`:
+              state.rs, tray.rs, plugins           tools, shared folders, no window
+    │                                                  │
+    ▼                                                  │
+ crates/nzap-core  — the engine, no Tauri dependency ◄─┘
     auth/       PKCE, loopback + copy/paste flows, refresh, revoke
     secrets.rs  OS keychain, 0600 file fallback
     colab/      front door (/tun/m/*), v1 APIs, quota, resources
@@ -33,6 +35,13 @@ Google Colab provides the compute; GitHub hosts the public notebooks.
 every process and every web page on the machine (CSRF, DNS rebinding). Tauri IPC
 is reachable only from the app's own webview. The only socket the app opens is
 the OAuth loopback listener, which accepts one request and closes.
+
+**Agents get stdio, not a port.** `nzap-engine mcp` is the same binary started
+by an MCP client as a child process; the protocol runs over its stdin/stdout, so
+nothing listens on the network. It builds its own `Engine` over the app's data
+folders and keychain entry, with its own runtime list (`agents/mcp-<pid>.json`)
+so it never overwrites the app's `sessions.json`. Local files go through
+`nzap-mcp`'s shared-folder check. See [MCP.md](./MCP.md).
 
 **`nzap-core` has no Tauri dependency.** The engine is tested with plain
 `cargo test` against `nzap-mock-colab`, a mock of every Google endpoint the
@@ -88,6 +97,7 @@ When you add a command, add it there too.
 src/                 React app (routes/, features/, api/, components/, lib/, dev/)
 src-tauri/           Tauri crate: commands/, state.rs, tray.rs, tauri.conf.json
 crates/nzap-core/    engine + integration tests (tests/)
+crates/nzap-mcp/     MCP server for AI agents (`nzap-engine mcp`) + tests
 crates/nzap-mock-colab/  axum mock of Google OAuth, Colab, Jupyter, TTY, Drive
 e2e/web/             Playwright against the simulated engine
 e2e/desktop/         WebdriverIO + tauri-driver against the real app and the mock

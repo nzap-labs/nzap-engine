@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/nzap-core", "crates/nzap-mock-colab", "src-tauri"]
+members = ["crates/nzap-core", "crates/nzap-mcp", "crates/nzap-mock-colab", "src-tauri"]
 
 [workspace.package]
 version = "0.1.0"
@@ -12,6 +12,7 @@ authors = ["NZAP Labs"]
 
 [workspace.dependencies]
 nzap-core = { path = "crates/nzap-core" }
+nzap-mcp = { path = "crates/nzap-mcp" }
 nzap-mock-colab = { path = "crates/nzap-mock-colab" }
 
 serde = { version = "1", features = ["derive"] }

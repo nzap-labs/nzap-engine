@@ -16,6 +16,7 @@
 //! | `display_image` / `clear_output` / `answer` | display data / clear / `execute_result` 42 |
 //! | `uv', 'pip', 'install'`               | the install automation's success line        |
 //! | `__NZAP_ARTIFACTS__`                  | lists files under `content/out` as the artifact marker |
+//! | `nzap_app_demo`                       | an NZAP app run: `ready`, a WAV output file, a text output, `done` |
 
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -375,6 +376,40 @@ impl Kernel {
                 json!({"data": {"image/png": "aGVsbG8=", "text/plain": "<Figure>"}, "metadata": {}}),
             )
             .await?;
+        }
+        if code.contains("nzap_app_demo") {
+            const APP_MIME: &str = "application/vnd.nzap.app+json";
+            let wav = b"RIFF\x24\x00\x00\x00WAVEfmt ".to_vec();
+            {
+                let mut mock = self.state.lock().expect("mock state");
+                if let Some(runtime) = mock.runtime_mut(&self.endpoint) {
+                    for dir in ["content/nzap", "content/nzap/outputs"] {
+                        runtime.files.insert(dir.into(), MockFile::Directory);
+                    }
+                    runtime
+                        .files
+                        .insert("content/nzap/outputs/speech.wav".into(), MockFile::Binary(wav));
+                }
+            }
+            let events = [
+                json!({"event": "stage", "id": "load", "label": "Loading the model"}),
+                json!({"event": "ready", "warm": false, "device": "cpu"}),
+                json!({"event": "output", "id": "audio", "kind": "audio",
+                       "path": "/content/nzap/outputs/speech.wav", "mime": "audio/wav",
+                       "filename": "speech.wav"}),
+                json!({"event": "output", "id": "summary", "kind": "text", "text": "Spoke 3 words."}),
+                json!({"event": "done", "seconds": {"setup": 1.5, "run": 0.5}}),
+            ];
+            for event in events {
+                self.send(
+                    socket,
+                    &parent,
+                    "iopub",
+                    "display_data",
+                    json!({"data": {APP_MIME: event, "text/plain": "<NZAP app event>"}, "metadata": {}}),
+                )
+                .await?;
+            }
         }
         if code.contains("clear_output") {
             self.send(socket, &parent, "iopub", "clear_output", json!({"wait": false})).await?;

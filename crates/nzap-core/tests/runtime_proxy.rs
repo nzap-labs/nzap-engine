@@ -79,6 +79,18 @@ async fn binary_uploads_round_trip() {
 }
 
 #[tokio::test]
+async fn large_uploads_go_in_chunks() {
+    let (env, proxy, endpoint) = runtime().await;
+    let size = nzap_core::runtime::proxy::UPLOAD_CHUNK_BYTES * 2 + 5;
+    let bytes: Vec<u8> = (0..size).map(|index| (index % 251) as u8).collect();
+    proxy.upload_file("content/video.mp4", &bytes).await.unwrap();
+    let state = env.mock.state();
+    let runtime = state.runtime(&endpoint).unwrap();
+    assert_eq!(runtime.upload_chunks, vec![1, 2, -1]);
+    assert_eq!(runtime.files.get("content/video.mp4"), Some(&MockFile::Binary(bytes)));
+}
+
+#[tokio::test]
 async fn notebooks_download_as_pretty_json() {
     let (env, proxy, endpoint) = runtime().await;
     env.mock
