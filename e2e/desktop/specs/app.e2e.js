@@ -60,8 +60,10 @@ async function buttonIn(container, text) {
   return button
 }
 
+/** Click a workspace tab once nothing covers it (a closing dialog, a toast). */
 async function openTab(name) {
   const tab = await $(`button[role="tab"]*=${name}`)
+  await tab.waitForClickable({ timeout: 10_000 })
   await tab.click()
 }
 
@@ -121,7 +123,10 @@ describe('NZAP Engine (real engine, mock Google)', () => {
     await field.setValue('Hi from a notebook')
     await (await dialog.$('button=Run')).click()
     await waitForText('div[role="dialog"]', 'Hi from a notebook')
-    await browser.keys('Escape')
+    // Close it with its button and wait until it is gone: its overlay
+    // would otherwise intercept the next test's first click.
+    await (await dialog.$('button[aria-label="Close"]')).click()
+    await dialog.waitForExist({ reverse: true, timeout: 10_000 })
   })
 
   it('opens a shell on the runtime', async () => {
