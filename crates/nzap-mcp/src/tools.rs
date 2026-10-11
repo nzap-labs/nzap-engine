@@ -10,8 +10,9 @@ use crate::protocol::{Peer, RpcError, INVALID_PARAMS};
 use crate::server::{hardware_choices, Reply, Server};
 
 pub const INSTRUCTIONS: &str = "\
-NZAP Engine runs work on the user's own Google Colab VMs (CPU, GPU or TPU), so heavy jobs \
-need nothing installed locally: speech to text, text to speech, audio/video conversion with \
+NZAP Engine runs work on the user's own Google Colab VMs (CPU, GPU or TPU), and on GitHub \
+Codespaces or CodeSandbox VMs when the user connected those (provider: codespaces or \
+codesandbox; status lists them), so heavy jobs need nothing installed locally: speech to text, text to speech, audio/video conversion with \
 ffmpeg (preinstalled on Colab), model inference, data processing.
 
 - One-off processing: run_job. It starts a fresh VM, uploads 'inputs', runs a Python script \
@@ -32,6 +33,24 @@ fn hardware_schema() -> Value {
         "type": "string",
         "enum": hardware_choices(),
         "description": "cpu (default), a GPU (t4 is the free-tier one) or a TPU.",
+    })
+}
+
+fn provider_schema() -> Value {
+    json!({
+        "type": "string",
+        "enum": ["colab", "codespaces", "codesandbox"],
+        "description": "Where the VM runs (default colab). codespaces and codesandbox are CPU VMs \
+                        and must be connected in the NZAP Engine app first.",
+    })
+}
+
+fn machine_schema() -> Value {
+    json!({
+        "type": "string",
+        "description": "codespaces: a machine type (basicLinux32gb, standardLinux32gb, …); \
+                        codesandbox: a VM tier (Pico, Nano, Micro, Small, Medium, Large, XLarge). \
+                        Defaults come from the app's settings.",
     })
 }
 
@@ -86,9 +105,12 @@ pub fn definitions() -> Vec<Value> {
         tool(
             "start_runtime",
             "Start a runtime",
-            "Allocate a Colab VM and connect a Python kernel. Takes 10–60 s. Uses compute units \
+            "Allocate a VM (Colab by default, or a codespace / CodeSandbox VM with 'provider') and \
+             connect a Python kernel. Colab takes 10–60 s, the others a few minutes. Uses compute \
              until stopped.",
             json!({
+                "provider": provider_schema(),
+                "machine": machine_schema(),
                 "hardware": hardware_schema(),
                 "high_mem": {"type": "boolean", "description": "High-RAM machine (some hardware is always High-RAM)."},
                 "name": {"type": "string", "description": "Optional name (letters, digits, - and _)."},
@@ -197,6 +219,8 @@ pub fn definitions() -> Vec<Value> {
                     },
                 },
                 "artifacts": {"type": "array", "items": {"type": "string"}, "description": "Paths or globs (relative to /content) to download afterwards."},
+                "provider": provider_schema(),
+                "machine": machine_schema(),
                 "hardware": hardware_schema(),
                 "high_mem": {"type": "boolean"},
                 "timeout_seconds": {"type": "integer", "minimum": 1, "description": "Seconds the script may run (default 600)."},
@@ -225,6 +249,8 @@ pub fn definitions() -> Vec<Value> {
                 "params": {"type": "object", "description": "Parameter values by key (see list_apps)."},
                 "files": {"type": "object", "additionalProperties": {"type": "string"}, "description": "File parameters: key → local path."},
                 "runtime": runtime,
+                "provider": provider_schema(),
+                "machine": machine_schema(),
                 "hardware": hardware_schema(),
                 "high_mem": {"type": "boolean"},
                 "output_dir": {"type": "string", "description": "Local folder for media results."},
@@ -244,6 +270,9 @@ fn hint(error: &Error) -> &'static str {
             " Stop a runtime (stop_runtime, or in the NZAP Engine app) and retry."
         }
         ErrorCode::Quota => " Try hardware 'cpu' or 't4'.",
+        ErrorCode::Provider => {
+            " The user can connect or fix it in NZAP Engine → Settings → Compute providers."
+        }
         _ => "",
     }
 }

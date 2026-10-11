@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button'
 import { useDialogs } from '@/components/dialogs'
 import { ExternalLink as LinkOut } from '@/components/external-link'
 import { cn } from '@/lib/cn'
-import type { ColabAssignment, ColabSession } from '@/types/colab'
+import { PROVIDER_LABELS, type ColabAssignment, type ColabSession } from '@/types/colab'
 
 function formatDuration(totalSeconds: number): string {
   if (!Number.isFinite(totalSeconds)) return '—'
@@ -88,11 +88,13 @@ export function RuntimeList({
                       )
                     }}
                     onDelete={async () => {
+                      const colab = session.provider === 'colab'
                       const confirmed = await dialogs.confirm({
                         title: `Stop ${session.name}?`,
-                        description:
-                          'The kernel stops and the VM is released back to Google. Files on the runtime are lost.',
-                        confirmLabel: 'Stop and release',
+                        description: colab
+                          ? 'The kernel stops and the VM is released back to Google. Files on the runtime are lost.'
+                          : `The ${PROVIDER_LABELS[session.provider]} VM is deleted. Files on it are lost.`,
+                        confirmLabel: colab ? 'Stop and release' : 'Stop and delete',
                         danger: true,
                       })
                       if (!confirmed) return
@@ -230,13 +232,24 @@ function RuntimeCard({
           <span className={cn('text-xs font-medium', acceleratorClass(session.accelerator))}>
             {session.accelerator}
           </span>
-          <span className="text-xs text-graphite">{session.shape}</span>
+          {session.provider === 'colab' ? (
+            <span className="text-xs text-graphite">{session.shape}</span>
+          ) : (
+            <span className="rounded-full border border-line px-2 py-0.5 text-[11px] font-medium">
+              {PROVIDER_LABELS[session.provider]}
+            </span>
+          )}
         </div>
         <p className="mt-1.5 text-xs text-graphite">
           up {formatDuration(session.uptimeSeconds)} · idle {formatDuration(session.idleSeconds)}
           {session.keepaliveError ? ' · keep-alive failing' : ''}
         </p>
-        <LifetimeBar remaining={session.lifetimeRemainingSeconds} uptime={session.uptimeSeconds} />
+        {session.provider === 'colab' && (
+          <LifetimeBar
+            remaining={session.lifetimeRemainingSeconds}
+            uptime={session.uptimeSeconds}
+          />
+        )}
       </button>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button variant="secondary" size="sm" disabled={busy} onClick={() => onAction('connect')}>
@@ -254,6 +267,15 @@ function RuntimeCard({
             className="inline-flex h-8 items-center gap-1.5 rounded-3xl px-3 text-sm font-medium transition-colors hover:bg-paper-soft"
           >
             <ExternalLink className="size-4" /> Open in Colab
+          </LinkOut>
+        )}
+        {session.webUrl && (
+          <LinkOut
+            href={session.webUrl}
+            className="inline-flex h-8 items-center gap-1.5 rounded-3xl px-3 text-sm font-medium transition-colors hover:bg-paper-soft"
+          >
+            <ExternalLink className="size-4" /> Open in{' '}
+            {session.provider === 'codespaces' ? 'Codespaces' : 'CodeSandbox'}
           </LinkOut>
         )}
         <Button variant="danger" size="sm" disabled={busy} onClick={onDelete}>

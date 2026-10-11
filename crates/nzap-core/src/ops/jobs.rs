@@ -57,6 +57,11 @@ pub struct JobRequest {
     pub timeout_seconds: Option<u64>,
     #[serde(default)]
     pub name: Option<String>,
+    /// Where the job's VM comes from (Colab by default).
+    #[serde(default)]
+    pub provider: crate::config::Provider,
+    #[serde(default)]
+    pub machine: Option<String>,
 }
 
 /// A local file a job uploads to its VM before the script runs.
@@ -121,6 +126,8 @@ pub fn plan(request: &JobRequest) -> Result<JobSpec> {
             gpu: request.gpu.clone(),
             tpu: request.tpu.clone(),
             high_mem: request.high_mem,
+            provider: request.provider,
+            machine: request.machine.clone(),
         },
         keep: request.keep,
         timeout: Duration::from_secs(request.timeout_seconds.unwrap_or(3600)),

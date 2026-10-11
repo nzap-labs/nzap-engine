@@ -26,8 +26,13 @@ interface FakeUser {
   picture: string | null
 }
 
+type FakeProvider = 'colab' | 'codespaces' | 'codesandbox'
+
 interface FakeSession {
   name: string
+  provider: FakeProvider
+  /** Codespaces machine / CodeSandbox tier. */
+  machine: string | null
   endpoint: string
   accelerator: string
   variant: string
@@ -93,6 +98,10 @@ export interface FakeState {
   update: { version: string; body: string; date: string } | null
   /** Set when the app asked to relaunch after installing an update. */
   restarted: boolean
+  /** The connected GitHub account (Codespaces), if any. */
+  github: { login: string } | null
+  /** Whether a CodeSandbox API key is stored. */
+  codesandbox: boolean
 }
 
 export interface FakeControls {
@@ -150,6 +159,13 @@ function initialState(): FakeState {
       keepAliveIntervalSeconds: 60,
       closeToTray: false,
       artifactsDir: null,
+      codespacesRepository: 'nzap-labs/nzap-runtime',
+      codespacesDevcontainerPath: '.devcontainer/devcontainer.json',
+      codespacesMachine: 'basicLinux32gb',
+      codesandboxTemplate: 'pcz35m',
+      codesandboxTier: 'Nano',
+      autoReleaseMinutes: 30,
+      githubClientId: null,
     },
     customClient: null,
     opened: [],
@@ -157,6 +173,8 @@ function initialState(): FakeState {
     saved: [],
     update: null,
     restarted: false,
+    github: null,
+    codesandbox: false,
   }
 }
 
@@ -239,10 +257,11 @@ export function installFakeEngine(): FakeControls {
   function view(session: FakeSession): Json {
     const uptime = Math.max(0, now() - session.createdAt)
     const idle = Math.max(0, now() - session.lastActivity)
+    const colab = session.provider === 'colab'
     return {
       name: session.name,
       endpoint: session.endpoint,
-      accelerator: session.accelerator,
+      accelerator: colab ? session.accelerator : (session.machine ?? 'CPU'),
       variant: session.variant,
       shape: session.shape,
       kernelId: session.kernelId,
@@ -255,16 +274,39 @@ export function installFakeEngine(): FakeControls {
       driveAuthorized: session.driveAuthorized,
       connected: session.connected,
       kernelState: session.connected ? session.kernelState : null,
-      colabUrl: `https://colab.research.google.com/notebooks/empty.ipynb?dbu=%2Ftun%2Fm%2F${session.endpoint}`,
+      colabUrl: colab
+        ? `https://colab.research.google.com/notebooks/empty.ipynb?dbu=%2Ftun%2Fm%2F${session.endpoint}`
+        : null,
       uptimeSeconds: Math.floor(uptime),
       idleSeconds: Math.floor(idle),
-      lifetimeRemainingSeconds: Math.max(0, Math.floor(12 * 3600 - uptime)),
-      idleRemainingSeconds: Math.max(0, Math.floor(90 * 60 - idle)),
+      lifetimeRemainingSeconds: colab ? Math.max(0, Math.floor(12 * 3600 - uptime)) : 0,
+      idleRemainingSeconds: colab ? Math.max(0, Math.floor(90 * 60 - idle)) : 0,
+      provider: session.provider,
+      webUrl:
+        session.provider === 'codespaces'
+          ? `https://github.com/codespaces/${session.endpoint}`
+          : session.provider === 'codesandbox'
+            ? `https://codesandbox.io/p/devbox/${session.endpoint}`
+            : null,
     }
   }
 
-  function newSession(name: string, gpu?: string, tpu?: string, highMem?: boolean): FakeSession {
+  function newSession(
+    name: string,
+    gpu?: string,
+    tpu?: string,
+    highMem?: boolean,
+    provider: FakeProvider = 'colab',
+    machine: string | null = null,
+  ): FakeSession {
     const accelerator = tpu ? tpu.toUpperCase() : gpu ? gpu.toUpperCase() : 'CPU'
+    const random = Math.random().toString(36).slice(2, 8)
+    const endpoint =
+      provider === 'codespaces'
+        ? `ada-nzap-runtime-${random}`
+        : provider === 'codesandbox'
+          ? `sb${random}`
+          : `m-s-${accelerator.toLowerCase()}-${random}`
     const files = new Map<string, FakeFile>([
       ['content', { dir: true, content: '' }],
       ['content/sample_data', { dir: true, content: '' }],
@@ -272,7 +314,9 @@ export function installFakeEngine(): FakeControls {
     ])
     return {
       name,
-      endpoint: `m-s-${accelerator.toLowerCase()}-${Math.random().toString(36).slice(2, 8)}`,
+      provider,
+      machine,
+      endpoint,
       accelerator,
       variant: tpu ? '2' : gpu ? '1' : '0',
       shape: highMem ? 'High-RAM' : 'Standard',
@@ -611,6 +655,97 @@ export function installFakeEngine(): FakeControls {
           configJson: JSON.stringify({ mcpServers: { nzap: { command, args: ['mcp'] } } }, null, 2),
         }
       }
+      // -- other compute providers
+      case 'providers_status':
+        return [
+          {
+            provider: 'codespaces',
+            connected: Boolean(s().github),
+            account: s().github?.login ?? null,
+            detail: s().github
+              ? `Runtimes from ${String(s().settings.codespacesRepository)}`
+              : null,
+            error: null,
+          },
+          {
+            provider: 'codesandbox',
+            connected: s().codesandbox,
+            account: null,
+            detail: s().codesandbox ? '0 of 10 VMs running' : null,
+            error: null,
+          },
+        ]
+      case 'provider_machines':
+        if (args.provider === 'codespaces') {
+          if (!s().github) fail('provider', 'Connect GitHub first (Settings → Compute providers).')
+          return [
+            {
+              name: 'basicLinux32gb',
+              label: '2 cores, 8 GB RAM, 32 GB storage',
+              cpus: 2,
+              memoryGb: 9,
+            },
+            {
+              name: 'standardLinux32gb',
+              label: '4 cores, 16 GB RAM, 32 GB storage',
+              cpus: 4,
+              memoryGb: 17,
+            },
+          ]
+        }
+        return ['Pico', 'Nano', 'Micro', 'Small', 'Medium', 'Large', 'XLarge'].map(
+          (name, index) => ({
+            name,
+            label: `${name} · ${2 ** index} CPU · ${2 ** (index + 1)} GB`,
+            cpus: 2 ** index,
+            memoryGb: 2 ** (index + 1),
+          }),
+        )
+      case 'github_set_token': {
+        await sleep()
+        const token = String(args.token ?? '').trim()
+        if (!token) fail('invalid_input', 'Paste a GitHub token.')
+        if (!token.startsWith('gh'))
+          fail(
+            'provider',
+            'GitHub rejected the stored token. Connect GitHub again (Settings → Compute providers).',
+          )
+        s().github = { login: 'ada' }
+        return { login: 'ada', name: 'Ada Lovelace', avatarUrl: null }
+      }
+      case 'github_use_cli':
+        await sleep()
+        s().github = { login: 'ada' }
+        return { login: 'ada', name: 'Ada Lovelace', avatarUrl: null }
+      case 'github_device_login': {
+        if (!s().settings.githubClientId)
+          fail(
+            'invalid_input',
+            'Sign in with GitHub needs a GitHub OAuth app. Add its client id under Settings → Compute providers, or use the GitHub CLI’s login or a token instead.',
+          )
+        const emit = emitter(args.onEvent)
+        const verificationUri = 'https://github.com/login/device'
+        emit({ userCode: 'WDJB-MJHT', verificationUri })
+        s().opened.push(verificationUri)
+        await sleep(s().delay * 4)
+        s().github = { login: 'ada' }
+        return { login: 'ada', name: 'Ada Lovelace', avatarUrl: null }
+      }
+      case 'github_disconnect':
+        s().github = null
+        return null
+      case 'codesandbox_set_key': {
+        await sleep()
+        const key = String(args.key ?? '').trim()
+        if (!key) fail('invalid_input', 'Paste a CodeSandbox API key.')
+        if (!key.startsWith('csb_'))
+          fail('provider', 'CodeSandbox rejected the API key (Unauthorized).')
+        s().codesandbox = true
+        return { concurrent_vm_count: 0, concurrent_vm_limit: 10, vms: [] }
+      }
+      case 'codesandbox_disconnect':
+        s().codesandbox = false
+        return null
       case 'config_get':
         return {
           gpus: ['t4', 'l4', 'g4', 'a100', 'h100'],
@@ -714,8 +849,16 @@ export function installFakeEngine(): FakeControls {
       case 'sessions_list':
         return [...s().sessions.values()].map(view)
       case 'session_create': {
-        requireConnected()
         const request = args.request as Json
+        const provider = (request.provider as FakeProvider | undefined) ?? 'colab'
+        if (provider === 'colab') requireConnected()
+        if (provider === 'codespaces' && !s().github)
+          fail('provider', 'Connect GitHub first (Settings → Compute providers).')
+        if (provider === 'codesandbox' && !s().codesandbox)
+          fail(
+            'provider',
+            'Connect CodeSandbox first: add an API key in Settings → Compute providers.',
+          )
         if (s().failNextCreate) {
           const failure = s().failNextCreate!
           s().failNextCreate = null
@@ -730,11 +873,22 @@ export function installFakeEngine(): FakeControls {
         if (s().sessions.has(name))
           fail('invalid_input', `A runtime named '${name}' already exists.`)
         await sleep(s().delay * 3)
+        const machine =
+          provider === 'colab'
+            ? null
+            : String(
+                request.machine ??
+                  (provider === 'codespaces'
+                    ? s().settings.codespacesMachine
+                    : s().settings.codesandboxTier),
+              )
         const created = newSession(
           name,
           request.gpu as string | undefined,
           request.tpu as string | undefined,
           Boolean(request.highMem),
+          provider,
+          machine,
         )
         created.kernelId = `kernel-${name}`
         created.connected = true
@@ -743,7 +897,8 @@ export function installFakeEngine(): FakeControls {
         log(name, 'session_created', {
           endpoint: created.endpoint,
           accelerator: created.accelerator,
-          how: 'assigned',
+          provider,
+          how: provider === 'colab' ? 'assigned' : 'created',
         })
         return { session: view(created), connected: true }
       }

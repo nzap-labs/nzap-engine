@@ -76,6 +76,17 @@ on at least one OS per release and on all three for major changes.
 - [ ] Run a public notebook with parameters.
 - [ ] Fork it, edit it, run your copy, export it, delete it, import the export.
 
+**Codespaces and CodeSandbox**
+
+- [ ] Publish `runtimes/codespaces` as `nzap-labs/nzap-runtime`; create a codespace from it by hand and confirm Jupyter answers on port 8888.
+- [ ] Connect GitHub three ways (device flow with an OAuth app, `gh` login, a token); a token without `codespace` is refused.
+- [ ] Launch a Codespaces runtime: `print(1)`, upload/download, the terminal (Jupyter terminado), and **Open in Codespaces**. Confirm `X-Github-Token` with a user OAuth token is accepted by the private port.
+- [ ] Stop the codespace on github.com; the next cell starts it again. Stop the runtime in NZAP: the codespace is deleted.
+- [ ] Connect CodeSandbox with an API key; launch a runtime on the default template: the VM agent starts Jupyter, `print(1)` works through the private preview host.
+- [ ] Let the sandbox hibernate; the next cell wakes it. Shut it down from CodeSandbox; the next cell boots it and restarts Jupyter.
+- [ ] With **Delete idle runtimes after** at 5 minutes, an idle runtime of each provider is deleted on its provider.
+- [ ] An app and an ephemeral job on each provider; an agent's `start_runtime` with `provider: codespaces`.
+
 **AI agents (MCP)**
 
 - [ ] Settings → AI agents: paste the Claude Code line; `claude mcp list` shows `nzap` connected (macOS, Windows, Linux AppImage and .deb).

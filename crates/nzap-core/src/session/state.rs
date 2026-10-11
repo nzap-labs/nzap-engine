@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::config::{self, hardware_label, shape_display_label};
+use crate::config::{self, hardware_label, shape_display_label, Provider};
 
 /// Colab session ceilings (free tier; documented in Colab's FAQ). The
 /// keep-alive loop handles the idle timeout, but the lifetime cap still
@@ -60,6 +60,18 @@ pub struct SessionState {
     pub drive_pending_uri: Option<String>,
     #[serde(default)]
     pub drive_authorized: bool,
+    /// Where the VM lives. Older files have no field: Colab.
+    #[serde(default)]
+    pub provider: Provider,
+    /// Codespaces machine type or CodeSandbox VM tier.
+    #[serde(default)]
+    pub machine: Option<String>,
+    /// The provider's own page for the VM (codespace / sandbox editor).
+    #[serde(default)]
+    pub web_url: Option<String>,
+    /// CodeSandbox: the Jupyter Server's token (never sent to the UI).
+    #[serde(default)]
+    pub jupyter_token: Option<String>,
 }
 
 fn default_accelerator() -> String {
@@ -103,11 +115,36 @@ impl SessionState {
             keepalive_error: None,
             drive_pending_uri: None,
             drive_authorized: false,
+            provider: Provider::Colab,
+            machine: None,
+            web_url: None,
+            jupyter_token: None,
         }
     }
 
+    /// A runtime on another provider, reached at `url`.
+    pub fn for_provider(
+        name: &str,
+        provider: Provider,
+        endpoint: &str,
+        url: &str,
+        machine: &str,
+    ) -> Self {
+        let mut state = Self::from_assignment(name, &serde_json::json!({}), "NONE");
+        state.provider = provider;
+        state.endpoint = endpoint.to_owned();
+        state.url = url.to_owned();
+        state.machine = Some(machine.to_owned());
+        state
+    }
+
+    /// `CPU`, `T4`, … on Colab; the machine (`basicLinux32gb`, `Nano`)
+    /// elsewhere.
     pub fn hardware(&self) -> String {
-        hardware_label(&self.accelerator)
+        match (&self.provider, &self.machine) {
+            (Provider::Colab, _) | (_, None) => hardware_label(&self.accelerator),
+            (_, Some(machine)) => machine.clone(),
+        }
     }
 
     pub fn view(
@@ -119,6 +156,7 @@ impl SessionState {
         let now = unix_now();
         let uptime = (now - self.created_at).max(0.0);
         let idle = (now - self.last_activity).max(0.0);
+        let colab = self.provider == Provider::Colab;
         SessionView {
             name: self.name.clone(),
             endpoint: self.endpoint.clone(),
@@ -135,12 +173,23 @@ impl SessionState {
             drive_authorized: self.drive_authorized,
             connected,
             kernel_state: if connected { kernel_state } else { None },
-            colab_url: (!self.endpoint.is_empty())
+            colab_url: (colab && !self.endpoint.is_empty())
                 .then(|| config::colab_connect_url(&self.endpoint, colab_host)),
             uptime_seconds: uptime as u64,
             idle_seconds: idle as u64,
-            lifetime_remaining_seconds: (MAX_LIFETIME_SECONDS - uptime).max(0.0) as u64,
-            idle_remaining_seconds: (IDLE_TIMEOUT_SECONDS - idle).max(0.0) as u64,
+            // Colab's ceilings; other providers bill until deleted instead.
+            lifetime_remaining_seconds: if colab {
+                (MAX_LIFETIME_SECONDS - uptime).max(0.0) as u64
+            } else {
+                0
+            },
+            idle_remaining_seconds: if colab {
+                (IDLE_TIMEOUT_SECONDS - idle).max(0.0) as u64
+            } else {
+                0
+            },
+            provider: self.provider,
+            web_url: self.web_url.clone(),
         }
     }
 }
@@ -173,6 +222,9 @@ pub struct SessionView {
     pub idle_seconds: u64,
     pub lifetime_remaining_seconds: u64,
     pub idle_remaining_seconds: u64,
+    pub provider: Provider,
+    /// The codespace's or sandbox's own page.
+    pub web_url: Option<String>,
 }
 
 /// A VM the account holds, as listed on the Runtimes page.
@@ -235,5 +287,29 @@ mod tests {
         .unwrap();
         assert_eq!(parsed.accelerator, "NONE");
         assert!(!parsed.drive_authorized);
+        assert_eq!(parsed.provider, Provider::Colab);
+    }
+
+    #[test]
+    fn provider_runtimes_hide_their_secrets_and_colab_details() {
+        let mut state = SessionState::for_provider(
+            "cs",
+            Provider::Codesandbox,
+            "abc123",
+            "https://abc123-8888.csb.app",
+            "Nano",
+        );
+        state.token = "preview-secret".into();
+        state.jupyter_token = Some("jupyter-secret".into());
+        let view = state.view("https://colab.research.google.com", false, None);
+        assert_eq!(view.accelerator, "Nano");
+        assert_eq!(view.colab_url, None);
+        assert_eq!(view.lifetime_remaining_seconds, 0);
+        let json = serde_json::to_string(&view).unwrap();
+        assert!(!json.contains("secret"));
+        assert!(json.contains("\"provider\":\"codesandbox\""));
+        let stored: SessionState =
+            serde_json::from_str(&serde_json::to_string(&state).unwrap()).unwrap();
+        assert_eq!(stored, state);
     }
 }

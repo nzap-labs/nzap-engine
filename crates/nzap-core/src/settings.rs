@@ -12,6 +12,20 @@ use crate::secrets::write_private;
 pub const MIN_KEEP_ALIVE_SECONDS: u64 = 30;
 pub const MAX_KEEP_ALIVE_SECONDS: u64 = 600;
 
+/// The repository whose dev container starts Jupyter in a codespace
+/// (`runtimes/codespaces` in this repository is its content).
+pub const DEFAULT_CODESPACES_REPOSITORY: &str = "nzap-labs/nzap-runtime";
+pub const DEFAULT_CODESPACES_DEVCONTAINER: &str = ".devcontainer/devcontainer.json";
+pub const DEFAULT_CODESPACES_MACHINE: &str = "basicLinux32gb";
+/// CodeSandbox's universal template (`getDefaultTemplateTag` in the SDK).
+pub const DEFAULT_CODESANDBOX_TEMPLATE: &str = "pcz35m";
+pub const DEFAULT_CODESANDBOX_TIER: &str = "Nano";
+/// The VM tiers CodeSandbox offers (`VMTier` in the SDK).
+pub const CODESANDBOX_TIERS: &[&str] =
+    &["Pico", "Nano", "Micro", "Small", "Medium", "Large", "XLarge"];
+pub const DEFAULT_AUTO_RELEASE_MINUTES: u64 = 30;
+pub const MAX_AUTO_RELEASE_MINUTES: u64 = 24 * 60;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -24,6 +38,18 @@ pub struct Settings {
     pub close_to_tray: bool,
     /// Where job artifacts are saved; `None` = the OS downloads folder.
     pub artifacts_dir: Option<String>,
+    /// `owner/repo` whose dev container serves Jupyter in a codespace.
+    pub codespaces_repository: String,
+    pub codespaces_devcontainer_path: String,
+    pub codespaces_machine: String,
+    /// The template (sandbox id or tag) new CodeSandbox VMs fork.
+    pub codesandbox_template: String,
+    pub codesandbox_tier: String,
+    /// Delete an idle Codespaces / CodeSandbox runtime after this many
+    /// minutes without a cell or file operation (0 = never).
+    pub auto_release_minutes: u64,
+    /// Your own GitHub OAuth app for "Sign in with GitHub" (device flow).
+    pub github_client_id: Option<String>,
 }
 
 impl Default for Settings {
@@ -34,6 +60,13 @@ impl Default for Settings {
             keep_alive_interval_seconds: 60,
             close_to_tray: false,
             artifacts_dir: None,
+            codespaces_repository: DEFAULT_CODESPACES_REPOSITORY.to_owned(),
+            codespaces_devcontainer_path: DEFAULT_CODESPACES_DEVCONTAINER.to_owned(),
+            codespaces_machine: DEFAULT_CODESPACES_MACHINE.to_owned(),
+            codesandbox_template: DEFAULT_CODESANDBOX_TEMPLATE.to_owned(),
+            codesandbox_tier: DEFAULT_CODESANDBOX_TIER.to_owned(),
+            auto_release_minutes: DEFAULT_AUTO_RELEASE_MINUTES,
+            github_client_id: None,
         }
     }
 }
@@ -48,6 +81,41 @@ pub struct SettingsPatch {
     pub close_to_tray: Option<bool>,
     /// An empty string resets to the default folder.
     pub artifacts_dir: Option<String>,
+    pub codespaces_repository: Option<String>,
+    pub codespaces_devcontainer_path: Option<String>,
+    pub codespaces_machine: Option<String>,
+    pub codesandbox_template: Option<String>,
+    pub codesandbox_tier: Option<String>,
+    pub auto_release_minutes: Option<u64>,
+    /// An empty string removes it.
+    pub github_client_id: Option<String>,
+}
+
+/// `owner/repo` with GitHub's allowed characters.
+pub fn valid_repository(repo: &str) -> bool {
+    let part = |text: &str| {
+        !text.is_empty()
+            && text.len() <= 100
+            && text.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            && text != "."
+            && text != ".."
+    };
+    matches!(repo.split_once('/'), Some((owner, name)) if part(owner) && part(name))
+}
+
+/// A relative path inside the repository, without `..`.
+fn valid_repo_path(path: &str) -> bool {
+    !path.is_empty()
+        && !path.starts_with('/')
+        && path.ends_with(".json")
+        && path.split('/').all(|part| !part.is_empty() && part != "..")
+}
+
+/// Letters, digits, `-` and `_` (machine names, template ids, client ids).
+fn valid_token(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 100
+        && value.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
 }
 
 /// `https://…`, or plain `http://` to a loopback host (local catalogs and
@@ -78,6 +146,25 @@ impl SettingsStore {
                 settings.keep_alive_interval_seconds = settings
                     .keep_alive_interval_seconds
                     .clamp(MIN_KEEP_ALIVE_SECONDS, MAX_KEEP_ALIVE_SECONDS);
+                settings.auto_release_minutes =
+                    settings.auto_release_minutes.min(MAX_AUTO_RELEASE_MINUTES);
+                let defaults = Settings::default();
+                if !valid_repository(&settings.codespaces_repository) {
+                    settings.codespaces_repository = defaults.codespaces_repository;
+                }
+                if !valid_repo_path(&settings.codespaces_devcontainer_path) {
+                    settings.codespaces_devcontainer_path = defaults.codespaces_devcontainer_path;
+                }
+                if !valid_token(&settings.codespaces_machine) {
+                    settings.codespaces_machine = defaults.codespaces_machine;
+                }
+                if !valid_token(&settings.codesandbox_template) {
+                    settings.codesandbox_template = defaults.codesandbox_template;
+                }
+                if !CODESANDBOX_TIERS.contains(&settings.codesandbox_tier.as_str()) {
+                    settings.codesandbox_tier = defaults.codesandbox_tier;
+                }
+                settings.github_client_id = settings.github_client_id.filter(|id| valid_token(id));
                 if !valid_catalog_url(&settings.catalog_url) {
                     settings.catalog_url = DEFAULT_CATALOG_URL.to_owned();
                 }
@@ -118,6 +205,63 @@ impl SettingsStore {
         if let Some(dir) = patch.artifacts_dir {
             let dir = dir.trim().to_owned();
             next.artifacts_dir = (!dir.is_empty()).then_some(dir);
+        }
+        if let Some(repo) = patch.codespaces_repository {
+            let repo = repo.trim().trim_start_matches("https://github.com/").trim_end_matches('/');
+            if !valid_repository(repo) {
+                return Err(Error::invalid("The repository must look like owner/name."));
+            }
+            next.codespaces_repository = repo.to_owned();
+        }
+        if let Some(path) = patch.codespaces_devcontainer_path {
+            let path = path.trim();
+            if !valid_repo_path(path) {
+                return Err(Error::invalid(
+                    "The dev container path must be a .json file inside the repository.",
+                ));
+            }
+            next.codespaces_devcontainer_path = path.to_owned();
+        }
+        if let Some(machine) = patch.codespaces_machine {
+            let machine = machine.trim();
+            if !valid_token(machine) {
+                return Err(Error::invalid("That is not a Codespaces machine name."));
+            }
+            next.codespaces_machine = machine.to_owned();
+        }
+        if let Some(template) = patch.codesandbox_template {
+            let template = template.trim();
+            if !valid_token(template) {
+                return Err(Error::invalid("That is not a CodeSandbox template id."));
+            }
+            next.codesandbox_template = template.to_owned();
+        }
+        if let Some(tier) = patch.codesandbox_tier {
+            let tier = CODESANDBOX_TIERS
+                .iter()
+                .find(|known| known.eq_ignore_ascii_case(tier.trim()))
+                .ok_or_else(|| {
+                    Error::invalid(format!(
+                        "The VM tier must be one of {}.",
+                        CODESANDBOX_TIERS.join(", ")
+                    ))
+                })?;
+            next.codesandbox_tier = (*tier).to_owned();
+        }
+        if let Some(minutes) = patch.auto_release_minutes {
+            if minutes > MAX_AUTO_RELEASE_MINUTES {
+                return Err(Error::invalid(format!(
+                    "Auto-delete takes 0 (never) to {MAX_AUTO_RELEASE_MINUTES} minutes."
+                )));
+            }
+            next.auto_release_minutes = minutes;
+        }
+        if let Some(id) = patch.github_client_id {
+            let id = id.trim();
+            if !id.is_empty() && !valid_token(id) {
+                return Err(Error::invalid("That is not a GitHub OAuth client id."));
+            }
+            next.github_client_id = (!id.is_empty()).then(|| id.to_owned());
         }
         write_private(&self.path, &serde_json::to_vec_pretty(&next)?)?;
         if let Ok(mut current) = self.current.write() {
@@ -168,6 +312,52 @@ mod tests {
                 ..SettingsPatch::default()
             })
             .is_err());
+    }
+
+    #[test]
+    fn provider_settings() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SettingsStore::load(dir.path().join("settings.json"));
+        let updated = store
+            .update(SettingsPatch {
+                codespaces_repository: Some("https://github.com/me/my-runtime/".into()),
+                codespaces_machine: Some("standardLinux32gb".into()),
+                codesandbox_tier: Some("micro".into()),
+                auto_release_minutes: Some(0),
+                github_client_id: Some("Iv1.abc123".into()),
+                ..SettingsPatch::default()
+            })
+            .unwrap();
+        assert_eq!(updated.codespaces_repository, "me/my-runtime");
+        assert_eq!(updated.codesandbox_tier, "Micro");
+        assert_eq!(updated.auto_release_minutes, 0);
+        assert_eq!(updated.github_client_id.as_deref(), Some("Iv1.abc123"));
+        let cleared = store
+            .update(SettingsPatch {
+                github_client_id: Some(" ".into()),
+                ..SettingsPatch::default()
+            })
+            .unwrap();
+        assert_eq!(cleared.github_client_id, None);
+        for bad in [
+            SettingsPatch {
+                codespaces_repository: Some("no-slash".into()),
+                ..SettingsPatch::default()
+            },
+            SettingsPatch {
+                codespaces_repository: Some("a/../b".into()),
+                ..SettingsPatch::default()
+            },
+            SettingsPatch {
+                codespaces_devcontainer_path: Some("../x.json".into()),
+                ..SettingsPatch::default()
+            },
+            SettingsPatch { codesandbox_tier: Some("Huge".into()), ..SettingsPatch::default() },
+            SettingsPatch { codesandbox_template: Some("a b".into()), ..SettingsPatch::default() },
+            SettingsPatch { auto_release_minutes: Some(100_000), ..SettingsPatch::default() },
+        ] {
+            assert!(store.update(bad).is_err());
+        }
     }
 
     #[test]

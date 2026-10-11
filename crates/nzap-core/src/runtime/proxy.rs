@@ -5,6 +5,10 @@
 //! proxy token as the `colab-runtime-proxy-token` query parameter *and* the
 //! `X-Colab-Runtime-Proxy-Token` header (google-colab-cli `contents.py` /
 //! `runtime.py`). Port of colab-studio's `RuntimeProxy`.
+//!
+//! Codespaces and CodeSandbox VMs run a plain Jupyter Server behind their
+//! own port forwarding; for those the proxy sends that provider's headers
+//! instead ([`ProxyAuth::Headers`]).
 
 use std::time::Duration;
 
@@ -42,32 +46,59 @@ fn to_ws_scheme(url: &url::Url) -> &'static str {
     }
 }
 
+/// How requests to a runtime's Jupyter server authenticate.
+#[derive(Clone)]
+pub enum ProxyAuth {
+    /// Colab's runtime proxy token (header and query parameter).
+    Colab(String),
+    /// Fixed headers: `X-Github-Token` for a codespace's forwarded port,
+    /// `csb-preview-token` + Jupyter's `Authorization` for CodeSandbox.
+    Headers(Vec<(&'static str, String)>),
+}
+
 #[derive(Clone)]
 pub struct RuntimeProxy {
     http: reqwest::Client,
     base_url: String,
-    token: String,
+    auth: ProxyAuth,
 }
 
 impl RuntimeProxy {
     pub fn new(http: reqwest::Client, base_url: &str, token: &str) -> Self {
-        Self { http, base_url: base_url.trim_end_matches('/').to_owned(), token: token.to_owned() }
+        Self::with_auth(http, base_url, ProxyAuth::Colab(token.to_owned()))
+    }
+
+    pub fn with_auth(http: reqwest::Client, base_url: &str, auth: ProxyAuth) -> Self {
+        Self { http, base_url: base_url.trim_end_matches('/').to_owned(), auth }
     }
 
     pub fn base_url(&self) -> &str {
         &self.base_url
     }
 
+    /// Colab's proxy token (empty for other providers).
     pub fn token(&self) -> &str {
-        &self.token
+        match &self.auth {
+            ProxyAuth::Colab(token) => token,
+            ProxyAuth::Headers(_) => "",
+        }
     }
 
-    /// The two headers the runtime proxy expects on every request.
-    pub fn auth_headers(&self) -> [(&'static str, String); 2] {
-        [
-            (CLIENT_AGENT_HEADER, CLIENT_AGENT.to_owned()),
-            (RUNTIME_PROXY_TOKEN_HEADER, self.token.clone()),
-        ]
+    /// A Colab VM (with `/colab/tty`, resources and credential requests),
+    /// rather than a plain Jupyter Server.
+    pub fn is_colab(&self) -> bool {
+        matches!(self.auth, ProxyAuth::Colab(_))
+    }
+
+    /// The headers every request and socket carries.
+    pub fn auth_headers(&self) -> Vec<(&'static str, String)> {
+        match &self.auth {
+            ProxyAuth::Colab(token) => vec![
+                (CLIENT_AGENT_HEADER, CLIENT_AGENT.to_owned()),
+                (RUNTIME_PROXY_TOKEN_HEADER, token.clone()),
+            ],
+            ProxyAuth::Headers(headers) => headers.clone(),
+        }
     }
 
     async fn request(
@@ -79,12 +110,11 @@ impl RuntimeProxy {
         timeout: Duration,
     ) -> Result<(Value, Vec<u8>)> {
         let url = format!("{}/{}", self.base_url, path.trim_start_matches('/'));
-        let mut request = self
-            .http
-            .request(method.clone(), &url)
-            .timeout(timeout)
-            .query(&[("authuser", "0"), (RUNTIME_PROXY_TOKEN_PARAM, &self.token)])
-            .query(extra_query);
+        let mut request = self.http.request(method.clone(), &url).timeout(timeout);
+        if let ProxyAuth::Colab(token) = &self.auth {
+            request = request.query(&[("authuser", "0"), (RUNTIME_PROXY_TOKEN_PARAM, token)]);
+        }
+        let mut request = request.query(extra_query);
         for (name, value) in self.auth_headers() {
             request = request.header(name, value);
         }
@@ -328,10 +358,46 @@ impl RuntimeProxy {
         let scheme = to_ws_scheme(&url);
         url.set_scheme(scheme)
             .map_err(|()| Error::internal("Could not build the kernel socket URL."))?;
-        url.query_pairs_mut()
-            .append_pair("session_id", session_id)
-            .append_pair(RUNTIME_PROXY_TOKEN_PARAM, &self.token)
-            .append_pair("authuser", "0");
+        url.query_pairs_mut().append_pair("session_id", session_id);
+        if let ProxyAuth::Colab(token) = &self.auth {
+            url.query_pairs_mut()
+                .append_pair(RUNTIME_PROXY_TOKEN_PARAM, token)
+                .append_pair("authuser", "0");
+        }
+        Ok(url.into())
+    }
+
+    /// Jupyter Server's `/api/status` — answers once the server is up.
+    pub async fn status(&self) -> Result<Value> {
+        self.request(Method::GET, "api/status", &[], None, Duration::from_secs(15))
+            .await
+            .map(|(value, _)| value)
+    }
+
+    /// Start a Jupyter terminal (`POST api/terminals`); returns its name.
+    pub async fn create_terminal(&self) -> Result<String> {
+        let created = self.json(Method::POST, "api/terminals", &[], None).await?;
+        created
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+            .ok_or_else(|| Error::runtime(None, "The runtime did not start a terminal."))
+    }
+
+    pub async fn delete_terminal(&self, name: &str) -> Result<()> {
+        self.json(Method::DELETE, &format!("api/terminals/{}", quote_path(name)), &[], None)
+            .await?;
+        Ok(())
+    }
+
+    /// `{ws base}/terminals/websocket/{name}` (Jupyter's terminado socket).
+    pub fn terminal_ws_url(&self, name: &str) -> Result<String> {
+        let mut url =
+            url::Url::parse(&format!("{}/terminals/websocket/{}", self.base_url, quote_path(name)))
+                .map_err(|error| Error::internal(format!("Bad runtime URL: {error}")))?;
+        let scheme = to_ws_scheme(&url);
+        url.set_scheme(scheme)
+            .map_err(|()| Error::internal("Could not build the terminal URL."))?;
         Ok(url.into())
     }
 
@@ -387,6 +453,24 @@ mod tests {
 
         let local = RuntimeProxy::new(reqwest::Client::new(), "http://127.0.0.1:9/proxy/ep", "t");
         assert_eq!(local.tty_url().unwrap(), "ws://127.0.0.1:9/colab/tty");
+    }
+
+    #[test]
+    fn header_auth_carries_no_colab_token() {
+        let proxy = RuntimeProxy::with_auth(
+            reqwest::Client::new(),
+            "https://cs-8888.app.github.dev",
+            ProxyAuth::Headers(vec![("X-Github-Token", "gho_x".into())]),
+        );
+        assert!(!proxy.is_colab());
+        assert_eq!(proxy.token(), "");
+        assert_eq!(proxy.auth_headers(), vec![("X-Github-Token", "gho_x".to_owned())]);
+        let kernel = proxy.kernel_ws_url("k", "s").unwrap();
+        assert_eq!(kernel, "wss://cs-8888.app.github.dev/api/kernels/k/channels?session_id=s");
+        assert_eq!(
+            proxy.terminal_ws_url("1").unwrap(),
+            "wss://cs-8888.app.github.dev/terminals/websocket/1"
+        );
     }
 
     #[test]

@@ -17,6 +17,7 @@ import { ExternalLink } from '@/components/external-link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { UpdatesCard } from '@/features/updates/updates-card'
+import { ProvidersCard } from '@/features/settings/providers-card'
 import { PageHeader } from '@/features/shell/page-header'
 import { errorMessage } from '@/lib/ipc'
 
@@ -169,6 +170,8 @@ function SettingsForm({ view }: { view: SettingsView }) {
               </Button>
             </form>
           </Card>
+
+          <ProvidersCard view={view} save={save} saving={update.isPending} />
 
           <AgentsCard />
 

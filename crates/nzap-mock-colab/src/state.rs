@@ -99,6 +99,42 @@ impl MockRuntime {
     }
 }
 
+/// A codespace on the mock GitHub. Its Jupyter runtime lives in
+/// `MockState::runtimes` under the codespace's name.
+#[derive(Clone, Debug, PartialEq)]
+pub struct MockCodespace {
+    pub name: String,
+    pub repository: String,
+    pub machine: String,
+    pub devcontainer_path: String,
+    pub display_name: String,
+    /// `Queued` → `Available` (after `polls_left` reads), `Shutdown`, …
+    pub state: String,
+    pub polls_left: u32,
+    pub idle_timeout_minutes: u64,
+    pub retention_period_minutes: Option<u64>,
+}
+
+/// A CodeSandbox sandbox on the mock API. Its Jupyter runtime lives in
+/// `MockState::runtimes` under the sandbox id.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct MockSandbox {
+    pub id: String,
+    pub template: String,
+    pub title: String,
+    pub tier: Option<String>,
+    pub running: bool,
+    pub hibernated: bool,
+    pub starts: u32,
+    pub pitcher_token: String,
+    pub preview_token: Option<String>,
+    /// Set when the VM agent was asked to start Jupyter.
+    pub jupyter_token: Option<String>,
+    pub jupyter_running: bool,
+    /// Every command the VM agent ran.
+    pub commands: Vec<String>,
+}
+
 #[derive(Debug)]
 pub struct MockState {
     pub base_url: String,
@@ -156,6 +192,25 @@ pub struct MockState {
     pub static_files: HashMap<String, String>,
     pub static_hits: HashMap<String, usize>,
     pub static_not_modified: usize,
+
+    // -- GitHub Codespaces ---------------------------------------------------
+    /// The token `/github/*` accepts (the user "signs in" with it).
+    pub github_token: String,
+    /// `X-OAuth-Scopes` on `/github/user` (`None`: a fine-grained token).
+    pub github_scopes: Option<String>,
+    /// Repositories codespaces can be created from.
+    pub codespace_repositories: HashSet<String>,
+    pub codespaces: BTreeMap<String, MockCodespace>,
+    /// How many reads a new or started codespace takes to become available.
+    pub codespace_boot_polls: u32,
+    /// Device-flow codes and how many polls each stays pending.
+    pub device_codes: HashMap<String, u32>,
+
+    // -- CodeSandbox ------------------------------------------------------------
+    pub csb_api_key: String,
+    pub csb_templates: HashSet<String>,
+    pub sandboxes: BTreeMap<String, MockSandbox>,
+    pub csb_vm_limit: u64,
 
     pub requests: Vec<RecordedRequest>,
     counter: u64,
@@ -218,6 +273,18 @@ impl MockState {
             static_files: HashMap::new(),
             static_hits: HashMap::new(),
             static_not_modified: 0,
+
+            github_token: "gho_mock_codespaces".to_owned(),
+            github_scopes: Some("codespace, read:user".to_owned()),
+            codespace_repositories: HashSet::from(["nzap-labs/nzap-runtime".to_owned()]),
+            codespaces: BTreeMap::new(),
+            codespace_boot_polls: 1,
+            device_codes: HashMap::new(),
+
+            csb_api_key: "csb_mock_key".to_owned(),
+            csb_templates: HashSet::from(["pcz35m".to_owned()]),
+            sandboxes: BTreeMap::new(),
+            csb_vm_limit: 10,
 
             requests: Vec::new(),
             counter: 0,

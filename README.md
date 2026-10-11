@@ -45,6 +45,10 @@ and unsigned-build warnings.
 - **Notebooks.** A public collection hosted on GitHub
   ([nzap-labs/nzap-notebooks](https://github.com/nzap-labs/nzap-notebooks)) plus
   your own private notebooks, all with typed parameters.
+- **Codespaces and CodeSandbox too.** Connect GitHub (sign-in, the GitHub CLI's
+  login or a token) or a CodeSandbox API key, and launch runtimes there. They
+  work like Colab runtimes: created on demand, kept warm for reuse, and deleted
+  when you stop them or after they sit idle.
 - **AI agents (MCP).** Claude Code, Claude Desktop, Cursor and other MCP
   clients can use your runtimes: `nzap-engine mcp` lets an agent start and stop
   VMs, run code, move files and run the apps, for example speech to text or
@@ -76,6 +80,7 @@ as Google's own `google-colab-cli` and the Colab VS Code extension.
 | [OAUTH.md](./docs/OAUTH.md)                     | how sign-in works, using your own OAuth client  |
 | [NOTEBOOKS.md](./docs/NOTEBOOKS.md)             | parameters, writing and contributing notebooks  |
 | [MCP.md](./docs/MCP.md)                         | connecting AI agents (Claude Code and others)   |
+| [PROVIDERS.md](./docs/PROVIDERS.md)             | GitHub Codespaces and CodeSandbox runtimes      |
 | [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) | common problems                                 |
 | [ARCHITECTURE.md](./docs/ARCHITECTURE.md)       | how the pieces fit, IPC conventions             |
 | [TESTING.md](./docs/TESTING.md)                 | the test suites and the live checklist          |

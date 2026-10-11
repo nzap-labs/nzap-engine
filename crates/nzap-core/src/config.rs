@@ -52,6 +52,20 @@ pub const KEEP_ALIVE_MAX: Duration = Duration::from_secs(24 * 3600);
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
 
 // ---------------------------------------------------------------------------
+// Other compute providers (see `providers/`)
+// ---------------------------------------------------------------------------
+
+/// GitHub's REST API and web host (OAuth device flow).
+pub const GITHUB_API: &str = "https://api.github.com";
+pub const GITHUB_WEB: &str = "https://github.com";
+/// A codespace's forwarded port (`{name}`, `{port}` are filled in).
+pub const CODESPACES_PORT_URL: &str = "https://{name}-{port}.app.github.dev";
+/// The CodeSandbox SDK's API (`@codesandbox/sdk`, `getInferredBaseUrl`).
+pub const CODESANDBOX_API: &str = "https://api.codesandbox.io";
+/// A sandbox's preview host (`HostTokens.getUrl` in `@codesandbox/sdk`).
+pub const CODESANDBOX_PREVIEW_URL: &str = "https://{id}-{port}.csb.app";
+
+// ---------------------------------------------------------------------------
 // OAuth
 //
 // Scopes are the union of colab-vscode/src/auth/scopes.ts (REQUIRED_SCOPES +
@@ -97,6 +111,11 @@ pub struct Endpoints {
     pub revoke_uri: String,
     pub userinfo_uri: String,
     pub drive_files: String,
+    pub github_api: String,
+    pub github_web: String,
+    pub codespaces_port_url: String,
+    pub codesandbox_api: String,
+    pub codesandbox_preview_url: String,
 }
 
 impl Default for Endpoints {
@@ -109,6 +128,11 @@ impl Default for Endpoints {
             revoke_uri: REVOKE_URI.to_owned(),
             userinfo_uri: USERINFO_URI.to_owned(),
             drive_files: DRIVE_FILES_ENDPOINT.to_owned(),
+            github_api: GITHUB_API.to_owned(),
+            github_web: GITHUB_WEB.to_owned(),
+            codespaces_port_url: CODESPACES_PORT_URL.to_owned(),
+            codesandbox_api: CODESANDBOX_API.to_owned(),
+            codesandbox_preview_url: CODESANDBOX_PREVIEW_URL.to_owned(),
         }
     }
 }
@@ -125,6 +149,12 @@ impl Endpoints {
             revoke_uri: format!("{base}/revoke"),
             userinfo_uri: format!("{base}/v1/userinfo"),
             drive_files: format!("{base}/drive/v3/files"),
+            github_api: format!("{base}/github"),
+            github_web: format!("{base}/github-web"),
+            // Provider VMs are served by the mock's runtime routes.
+            codespaces_port_url: format!("{base}/proxy/{{name}}"),
+            codesandbox_api: format!("{base}/csb"),
+            codesandbox_preview_url: format!("{base}/proxy/{{id}}"),
         }
     }
 
@@ -134,7 +164,7 @@ impl Endpoints {
         if let Some(base) = lookup("NZAP_MOCK_GOOGLE") {
             self = Self::single_host(&base);
         }
-        let fields: [(&str, &mut String); 7] = [
+        let fields: [(&str, &mut String); 12] = [
             ("NZAP_COLAB_DOMAIN", &mut self.colab),
             ("NZAP_COLAB_API_DOMAIN", &mut self.colab_api),
             ("NZAP_OAUTH_AUTH_URI", &mut self.auth_uri),
@@ -142,6 +172,11 @@ impl Endpoints {
             ("NZAP_OAUTH_REVOKE_URI", &mut self.revoke_uri),
             ("NZAP_OAUTH_USERINFO_URI", &mut self.userinfo_uri),
             ("NZAP_DRIVE_FILES_ENDPOINT", &mut self.drive_files),
+            ("NZAP_GITHUB_API", &mut self.github_api),
+            ("NZAP_GITHUB_WEB", &mut self.github_web),
+            ("NZAP_CODESPACES_PORT_URL", &mut self.codespaces_port_url),
+            ("NZAP_CODESANDBOX_API", &mut self.codesandbox_api),
+            ("NZAP_CODESANDBOX_PREVIEW_URL", &mut self.codesandbox_preview_url),
         ];
         for (name, field) in fields {
             if let Some(value) = lookup(name) {
@@ -327,6 +362,50 @@ pub fn uuid_to_web_safe_base64(value: &uuid::Uuid) -> String {
     format!("{}{padding}", text.replace('-', "_"))
 }
 
+/// Where a runtime's compute comes from.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Provider {
+    /// A Colab VM on the connected Google account.
+    #[default]
+    Colab,
+    /// A GitHub Codespace on the connected GitHub account.
+    Codespaces,
+    /// A CodeSandbox VM sandbox in the API key's workspace.
+    Codesandbox,
+}
+
+impl Provider {
+    pub const ALL: [Provider; 3] = [Provider::Colab, Provider::Codespaces, Provider::Codesandbox];
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Colab => "colab",
+            Self::Codespaces => "codespaces",
+            Self::Codesandbox => "codesandbox",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Colab => "Google Colab",
+            Self::Codespaces => "GitHub Codespaces",
+            Self::Codesandbox => "CodeSandbox",
+        }
+    }
+
+    pub fn parse(value: &str) -> crate::Result<Self> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "" | "colab" | "google" => Ok(Self::Colab),
+            "codespaces" | "codespace" | "github" => Ok(Self::Codespaces),
+            "codesandbox" | "csb" => Ok(Self::Codesandbox),
+            other => Err(crate::Error::invalid(format!(
+                "Unknown provider '{other}'. Use colab, codespaces or codesandbox."
+            ))),
+        }
+    }
+}
+
 /// A normalised runtime request coming from the UI.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -338,6 +417,12 @@ pub struct RuntimeRequest {
     pub tpu: Option<String>,
     #[serde(default)]
     pub high_mem: bool,
+    #[serde(default)]
+    pub provider: Provider,
+    /// Codespaces machine type or CodeSandbox VM tier (provider default
+    /// from Settings when absent). Colab uses `gpu` / `tpu` instead.
+    #[serde(default)]
+    pub machine: Option<String>,
 }
 
 impl RuntimeRequest {
@@ -345,8 +430,12 @@ impl RuntimeRequest {
         resolve_runtime_options(self.gpu.as_deref(), self.tpu.as_deref(), self.high_mem)
     }
 
-    /// `CPU`, `T4 High-RAM`, `V6E1`, …
+    /// `CPU`, `T4 High-RAM`, `V6E1`, `Codespaces basicLinux32gb`, …
     pub fn label(&self) -> String {
+        if self.provider != Provider::Colab {
+            let machine = self.machine.as_deref().unwrap_or("default machine");
+            return format!("{} {machine}", self.provider.label());
+        }
         let (_, accelerator, shape) = self.resolved();
         let high_ram = if shape == Some(Shape::HighRam) { " High-RAM" } else { "" };
         format!("{}{high_ram}", hardware_label(accelerator.as_str()))
@@ -392,9 +481,21 @@ mod tests {
         assert_eq!(shape_display_label("1"), "High-RAM");
         assert_eq!(shape_display_label("HIGH_RAM"), "High-RAM");
         assert_eq!(shape_display_label("0"), "Standard");
-        let request =
-            RuntimeRequest { name: "a".into(), gpu: Some("t4".into()), tpu: None, high_mem: true };
+        let request = RuntimeRequest {
+            name: "a".into(),
+            gpu: Some("t4".into()),
+            high_mem: true,
+            ..RuntimeRequest::default()
+        };
         assert_eq!(request.label(), "T4 High-RAM");
+        let codespace = RuntimeRequest {
+            provider: Provider::Codespaces,
+            machine: Some("basicLinux32gb".into()),
+            ..RuntimeRequest::default()
+        };
+        assert_eq!(codespace.label(), "GitHub Codespaces basicLinux32gb");
+        assert_eq!(Provider::parse("CSB").unwrap(), Provider::Codesandbox);
+        assert!(Provider::parse("aws").is_err());
     }
 
     #[test]

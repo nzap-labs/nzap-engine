@@ -46,6 +46,11 @@ pub enum Error {
     #[error("{message}")]
     Colab { status: Option<u16>, message: String, body: String },
 
+    /// GitHub Codespaces or CodeSandbox refused or failed a request, or is
+    /// not connected (`status` is `None` then).
+    #[error("{message}")]
+    Provider { provider: &'static str, status: Option<u16>, message: String },
+
     /// The runtime's Jupyter server (via its proxy) failed.
     #[error("{message}")]
     Runtime { status: Option<u16>, message: String },
@@ -78,6 +83,7 @@ pub enum ErrorCode {
     TooManyRuntimes,
     Quota,
     Colab,
+    Provider,
     Runtime,
     Network,
     Io,
@@ -96,6 +102,7 @@ impl Error {
             Self::TooManyAssignments => ErrorCode::TooManyRuntimes,
             Self::Quota(_) => ErrorCode::Quota,
             Self::Colab { .. } => ErrorCode::Colab,
+            Self::Provider { .. } => ErrorCode::Provider,
             Self::Runtime { .. } => ErrorCode::Runtime,
             Self::Network(_) => ErrorCode::Network,
             Self::Io(_) => ErrorCode::Io,
@@ -107,7 +114,9 @@ impl Error {
     /// The HTTP status behind the error, when there was one.
     pub fn status(&self) -> Option<u16> {
         match self {
-            Self::Colab { status, .. } | Self::Runtime { status, .. } => *status,
+            Self::Colab { status, .. }
+            | Self::Runtime { status, .. }
+            | Self::Provider { status, .. } => *status,
             Self::TooManyAssignments => Some(412),
             Self::NotFound(_) => Some(404),
             _ => None,
@@ -135,6 +144,14 @@ impl Error {
 
     pub fn runtime(status: Option<u16>, message: impl Into<String>) -> Self {
         Self::Runtime { status, message: message.into() }
+    }
+
+    pub fn provider(
+        provider: &'static str,
+        status: Option<u16>,
+        message: impl Into<String>,
+    ) -> Self {
+        Self::Provider { provider, status, message: message.into() }
     }
 
     pub fn payload(&self) -> ErrorPayload {

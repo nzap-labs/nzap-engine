@@ -3,20 +3,43 @@ import { useQuery } from '@tanstack/react-query'
 import { Cpu, Loader2, Rocket } from 'lucide-react'
 import { toast } from 'sonner'
 import { colabConfigQuery, colabQuotaQuery, colabStatusQuery, useCreateSession } from '@/api/colab'
+import { machinesQuery, providersQuery } from '@/api/providers'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/cn'
+import { PROVIDER_LABELS, type Provider } from '@/types/colab'
 
 type Hardware = 'cpu' | 'gpu' | 'tpu'
 
+const PROVIDERS: Provider[] = ['colab', 'codespaces', 'codesandbox']
+const SHORT_LABELS: Record<Provider, string> = {
+  colab: 'Colab',
+  codespaces: 'Codespaces',
+  codesandbox: 'CodeSandbox',
+}
+
 /**
- * Launch form for a new Colab runtime: CPU / GPU / TPU with the accelerator
- * picker colab-studio exposes (plus High-RAM where the shape applies).
+ * Launch form for a new runtime: on Colab, CPU / GPU / TPU with the
+ * accelerator picker colab-studio exposes (plus High-RAM where the shape
+ * applies); on GitHub Codespaces or CodeSandbox, a machine type.
  */
 export function NewRuntimeCard({ onCreated }: { onCreated?: (name: string) => void }) {
   const { data: config } = useQuery(colabConfigQuery)
   const { data: status } = useQuery(colabStatusQuery)
   const { data: quota } = useQuery({ ...colabQuotaQuery, enabled: Boolean(status?.connected) })
+  const { data: providers } = useQuery(providersQuery)
   const create = useCreateSession()
+
+  const [provider, setProvider] = useState<Provider>('colab')
+  const [machine, setMachine] = useState('')
+  const providerStatus =
+    provider === 'colab' ? undefined : providers?.find((entry) => entry.provider === provider)
+  const providerConnected = Boolean(providerStatus?.connected)
+  const { data: machines } = useQuery(
+    machinesQuery(
+      provider === 'colab' ? 'codesandbox' : provider,
+      provider !== 'colab' && providerConnected,
+    ),
+  )
 
   const [name, setName] = useState('')
   const [hardware, setHardware] = useState<Hardware>('cpu')
@@ -37,17 +60,21 @@ export function NewRuntimeCard({ onCreated }: { onCreated?: (name: string) => vo
   const shapeApplies =
     hardware !== 'cpu' && selectedAccelerator !== '' && !highMemOnly.includes(selectedAccelerator)
 
-  const noEligibleAccelerator = hardware !== 'cpu' && selectedAccelerator === ''
-  const disabled = !status?.connected || create.isPending || noEligibleAccelerator
+  const colab = provider === 'colab'
+  const noEligibleAccelerator = colab && hardware !== 'cpu' && selectedAccelerator === ''
+  const disabled =
+    (colab ? !status?.connected : !providerConnected) || create.isPending || noEligibleAccelerator
 
   function launch() {
     create.mutate(
-      {
-        name: name.trim() || undefined,
-        gpu: hardware === 'gpu' ? selectedAccelerator : undefined,
-        tpu: hardware === 'tpu' ? selectedAccelerator : undefined,
-        highMem: shapeApplies ? highMem : undefined,
-      },
+      colab
+        ? {
+            name: name.trim() || undefined,
+            gpu: hardware === 'gpu' ? selectedAccelerator : undefined,
+            tpu: hardware === 'tpu' ? selectedAccelerator : undefined,
+            highMem: shapeApplies ? highMem : undefined,
+          }
+        : { name: name.trim() || undefined, provider, machine: machine || undefined },
       {
         onSuccess: (result) => {
           toast.success(`Runtime ${result.session.name} is ready (${result.session.accelerator}).`)
@@ -64,10 +91,40 @@ export function NewRuntimeCard({ onCreated }: { onCreated?: (name: string) => vo
     <section aria-label="New runtime" className="rounded-[24px] border border-ink bg-paper p-6">
       <p className="font-medium">New runtime</p>
       <p className="mt-1 text-sm text-graphite">
-        Allocating a free-tier GPU can take a minute — the request waits for Google.
+        {colab
+          ? 'Allocating a free-tier GPU can take a minute — the request waits for Google.'
+          : `A new ${PROVIDER_LABELS[provider]} VM takes a few minutes to start Jupyter. It stays warm for reuse and is deleted when you stop it or it sits idle.`}
       </p>
 
       <div className="mt-4 space-y-4">
+        <div>
+          <span className="text-xs font-medium uppercase tracking-[0.14em] text-graphite">
+            Provider
+          </span>
+          <div className="mt-1.5 flex flex-wrap gap-2" role="radiogroup" aria-label="Provider">
+            {PROVIDERS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="radio"
+                aria-checked={provider === option}
+                onClick={() => {
+                  setProvider(option)
+                  setMachine('')
+                }}
+                className={cn(
+                  'h-9 cursor-pointer rounded-3xl border px-4 text-sm font-medium transition-colors',
+                  provider === option
+                    ? 'border-ink bg-sunshine text-on-sunshine'
+                    : 'border-ink text-ink hover:bg-paper-soft',
+                )}
+              >
+                {SHORT_LABELS[option]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label className="block">
           <span className="text-xs font-medium uppercase tracking-[0.14em] text-graphite">
             Name
@@ -81,32 +138,56 @@ export function NewRuntimeCard({ onCreated }: { onCreated?: (name: string) => vo
           />
         </label>
 
-        <div>
-          <span className="text-xs font-medium uppercase tracking-[0.14em] text-graphite">
-            Hardware
-          </span>
-          <div className="mt-1.5 flex gap-2" role="radiogroup" aria-label="Hardware">
-            {(['cpu', 'gpu', 'tpu'] as Hardware[]).map((option) => (
-              <button
-                key={option}
-                type="button"
-                role="radio"
-                aria-checked={hardware === option}
-                onClick={() => setHardware(option)}
-                className={cn(
-                  'h-9 cursor-pointer rounded-3xl border px-4 text-sm font-medium uppercase transition-colors',
-                  hardware === option
-                    ? 'border-ink bg-sunshine text-on-sunshine'
-                    : 'border-ink text-ink hover:bg-paper-soft',
-                )}
-              >
-                {option}
-              </button>
-            ))}
-          </div>
-        </div>
+        {!colab && (
+          <label className="block">
+            <span className="text-xs font-medium uppercase tracking-[0.14em] text-graphite">
+              Machine
+            </span>
+            <select
+              value={machine}
+              onChange={(event) => setMachine(event.target.value)}
+              disabled={!providerConnected}
+              aria-label="Machine"
+              className="mt-1.5 h-11 w-full rounded-2xl border border-ink bg-transparent px-3 text-sm outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ink"
+            >
+              <option value="">Default (Settings)</option>
+              {(machines ?? []).map((option) => (
+                <option key={option.name} value={option.name}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
-        {accelerators.length > 0 && (
+        {colab && (
+          <div>
+            <span className="text-xs font-medium uppercase tracking-[0.14em] text-graphite">
+              Hardware
+            </span>
+            <div className="mt-1.5 flex gap-2" role="radiogroup" aria-label="Hardware">
+              {(['cpu', 'gpu', 'tpu'] as Hardware[]).map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="radio"
+                  aria-checked={hardware === option}
+                  onClick={() => setHardware(option)}
+                  className={cn(
+                    'h-9 cursor-pointer rounded-3xl border px-4 text-sm font-medium uppercase transition-colors',
+                    hardware === option
+                      ? 'border-ink bg-sunshine text-on-sunshine'
+                      : 'border-ink text-ink hover:bg-paper-soft',
+                  )}
+                >
+                  {option}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {colab && accelerators.length > 0 && (
           <label className="block">
             <span className="text-xs font-medium uppercase tracking-[0.14em] text-graphite">
               Accelerator
@@ -132,7 +213,7 @@ export function NewRuntimeCard({ onCreated }: { onCreated?: (name: string) => vo
           </p>
         )}
 
-        {shapeApplies && (
+        {colab && shapeApplies && (
           <label className="flex items-center gap-2.5 text-sm">
             <input
               type="checkbox"
@@ -150,11 +231,17 @@ export function NewRuntimeCard({ onCreated }: { onCreated?: (name: string) => vo
           ) : (
             <Rocket className="size-4" />
           )}
-          {create.isPending ? 'Allocating…' : 'Launch runtime'}
+          {create.isPending ? (colab ? 'Allocating…' : 'Starting the VM…') : 'Launch runtime'}
         </Button>
-        {!status?.connected && (
+        {colab && !status?.connected && (
           <p className="flex items-center gap-1.5 text-xs text-graphite">
             <Cpu className="size-3.5" /> Connect Google Auth first.
+          </p>
+        )}
+        {!colab && !providerConnected && (
+          <p className="flex items-center gap-1.5 text-xs text-graphite">
+            <Cpu className="size-3.5" /> Connect {PROVIDER_LABELS[provider]} in Settings → Compute
+            providers first.
           </p>
         )}
       </div>

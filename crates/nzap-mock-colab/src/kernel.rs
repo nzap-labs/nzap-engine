@@ -45,8 +45,8 @@ async fn channels(
     upgrade: WebSocketUpgrade,
 ) -> Response {
     {
-        let mock = state.lock().expect("mock state");
-        if let Err(response) = check_runtime_token(&mock, &endpoint, &headers, &query) {
+        let mut mock = state.lock().expect("mock state");
+        if let Err(response) = check_runtime_token(&mut mock, &endpoint, &headers, &query) {
             return response;
         }
         let known =

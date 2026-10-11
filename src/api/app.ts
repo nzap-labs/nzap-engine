@@ -13,6 +13,14 @@ export interface Settings {
   keepAliveIntervalSeconds: number
   closeToTray: boolean
   artifactsDir: string | null
+  codespacesRepository: string
+  codespacesDevcontainerPath: string
+  codespacesMachine: string
+  codesandboxTemplate: string
+  codesandboxTier: string
+  /** Delete idle Codespaces / CodeSandbox runtimes after this long (0 = never). */
+  autoReleaseMinutes: number
+  githubClientId: string | null
 }
 
 export interface SettingsView {
@@ -22,7 +30,11 @@ export interface SettingsView {
   defaultCatalogUrl: string
 }
 
-export type SettingsPatch = Partial<Omit<Settings, 'artifactsDir'>> & { artifactsDir?: string }
+export type SettingsPatch = Partial<Omit<Settings, 'artifactsDir' | 'githubClientId'>> & {
+  artifactsDir?: string
+  /** An empty string removes it. */
+  githubClientId?: string
+}
 
 export const appInfoQuery = queryOptions({
   queryKey: ['app', 'info'],

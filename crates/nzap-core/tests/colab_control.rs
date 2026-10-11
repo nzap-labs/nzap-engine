@@ -15,6 +15,7 @@ fn request(gpu: Option<&str>, tpu: Option<&str>, high_mem: bool) -> RuntimeReque
         gpu: gpu.map(str::to_owned),
         tpu: tpu.map(str::to_owned),
         high_mem,
+        ..RuntimeRequest::default()
     }
 }
 

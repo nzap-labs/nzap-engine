@@ -10,6 +10,7 @@ export type ErrorCode =
   | 'too_many_runtimes'
   | 'quota'
   | 'colab'
+  | 'provider'
   | 'runtime'
   | 'network'
   | 'io'

@@ -319,10 +319,20 @@ Each phase ends green in CI and with a commit and push to `main`.
 - [x] Tests: protocol, tools and disconnect cleanup against the mock; the real binary driven over stdio
 - [ ] Live checklist in docs/TESTING.md (chunked uploads and Windows stdio on real Colab and clients)
 
+### Phase 15 — Codespaces and CodeSandbox
+
+- [x] `providers/`: GitHub Codespaces (REST API; device-flow, `gh` CLI or token sign-in; private forwarded port with `X-Github-Token`) and CodeSandbox (SDK REST API; private sandboxes; Jupyter started through the VM agent's MessagePack protocol; private preview host)
+- [x] One runtime shape: `ProxyAuth` per provider, Jupyter terminado terminals, `/content` on every VM; sessions record their provider; Colab-only features (resources, Drive, keep-alive pings) stay Colab-only
+- [x] Lifecycle: created on demand, warm for reuse, woken after GitHub stops / CodeSandbox hibernates, deleted on stop or after `autoReleaseMinutes` idle (reaper; GitHub retention period too)
+- [x] Settings → Compute providers, provider choice in New runtime, provider badges and links; MCP `provider` / `machine`
+- [x] Mock GitHub + CodeSandbox (REST, device flow, VM agent) and integration tests; `runtimes/codespaces` dev container
+- [ ] Live checklist in docs/TESTING.md; publish `nzap-labs/nzap-runtime`; register the NZAP GitHub OAuth app
+
 ## 10. Risks & open items
 
 | Risk                                                                                                                 | Mitigation                                                                                                                       |
 | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| CodeSandbox's VM agent protocol is undocumented (taken from `@codesandbox/sdk`)                                      | Used for one call (start Jupyter); a template with Jupyter pre-started needs none of it                                          |
 | Colab internal endpoints change                                                                                      | All endpoints live in one module, mock-based contract tests document the expected shapes, and errors surface with the raw status |
 | Default OAuth client (the Google Cloud SDK installed-app client that colab-cli reuses) could be restricted by Google | BYO OAuth client in Settings, `NZAP_OAUTH_CLIENT_JSON`, or `oauth-client.json`; documented in `docs/OAUTH.md`                    |
 | `nzap-labs/nzap-notebooks` does not exist yet                                                                        | The app ships a bundled catalog snapshot; repo content is prepared locally for the maintainer to push                            |

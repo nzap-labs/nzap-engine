@@ -24,11 +24,14 @@ mod control;
 mod files;
 mod kernel;
 mod oauth;
+mod providers;
 mod runtime;
 pub mod state;
 mod tty;
 
-pub use state::{MockAssignment, MockFile, MockRuntime, MockState, RecordedRequest};
+pub use state::{
+    MockAssignment, MockCodespace, MockFile, MockRuntime, MockSandbox, MockState, RecordedRequest,
+};
 
 /// Shared mock state, handed to every route.
 pub type Shared = Arc<Mutex<MockState>>;
@@ -92,6 +95,7 @@ fn router(state: Shared) -> Router {
         .merge(kernel::routes())
         .merge(tty::routes())
         .merge(files::routes())
+        .merge(providers::routes())
         // Uploads arrive as base64 JSON in chunks of up to 8 MiB.
         .layer(axum::extract::DefaultBodyLimit::max(32 * 1024 * 1024))
         .layer(middleware::from_fn_with_state(state.clone(), record))

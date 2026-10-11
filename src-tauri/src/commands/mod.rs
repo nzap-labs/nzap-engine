@@ -7,4 +7,5 @@ pub mod auth;
 pub mod dialogs;
 pub mod files;
 pub mod notebooks;
+pub mod providers;
 pub mod sessions;

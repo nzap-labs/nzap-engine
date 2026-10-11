@@ -10,7 +10,7 @@ use serde_json::{json, Map, Value};
 
 use nzap_core::colab::client::quota_message;
 use nzap_core::config::{
-    Accelerator, RuntimeRequest, GPU_CHOICES, HIGH_MEM_ONLY_CHOICES, TPU_CHOICES,
+    Accelerator, Provider, RuntimeRequest, GPU_CHOICES, HIGH_MEM_ONLY_CHOICES, TPU_CHOICES,
 };
 use nzap_core::ops::jobs::{self, JobInput, JobRequest};
 use nzap_core::ops::runfile::EnvSpec;
@@ -123,6 +123,26 @@ pub fn runtime_request(
         }
     }
     Ok(request)
+}
+
+/// A runtime request from a tool's `provider` / `machine` / `hardware`
+/// arguments. `default_hardware` applies to Colab only.
+pub fn request_for(
+    name: String,
+    args: &Value,
+    default_hardware: Option<&str>,
+) -> Result<RuntimeRequest> {
+    let provider = Provider::parse(str_arg(args, "provider").unwrap_or("colab"))?;
+    if provider == Provider::Colab {
+        let hardware = str_arg(args, "hardware").or(default_hardware);
+        return runtime_request(name, hardware, bool_arg(args, "high_mem"));
+    }
+    Ok(RuntimeRequest {
+        name,
+        provider,
+        machine: str_arg(args, "machine").map(str::to_owned),
+        ..RuntimeRequest::default()
+    })
 }
 
 /// A file name that is safe on the VM and on every desktop OS.
@@ -283,6 +303,7 @@ impl Server {
             "sharedFolders": self.options.files.roots(),
             "outputFolder": self.options.files.output_dir(),
             "maxFileMb": self.options.max_file_bytes / (1024 * 1024),
+            "otherProviders": self.engine.providers.status().await,
         })))
     }
 
@@ -325,7 +346,7 @@ impl Server {
     pub async fn start_runtime(&self, args: &Value) -> Result<Reply> {
         let name =
             str_arg(args, "name").map_or_else(|| format!("agent-{}", short_id()), str::to_owned);
-        let request = runtime_request(name, str_arg(args, "hardware"), bool_arg(args, "high_mem"))?;
+        let request = request_for(name, args, None)?;
         let view = self.start(request, bool_arg(args, "keep_after_disconnect")).await?;
         Ok(Reply::json(&json!({
             "runtime": view,
@@ -496,8 +517,7 @@ impl Server {
             inputs.push(JobInput { local: path, remote });
         }
 
-        let request =
-            runtime_request(String::new(), str_arg(args, "hardware"), bool_arg(args, "high_mem"))?;
+        let request = request_for(String::new(), args, None)?;
         let env: EnvSpec = match args.get("env") {
             Some(env) if !env.is_null() => serde_json::from_value(env.clone())
                 .map_err(|_| Error::invalid("'env' must map names to values."))?,
@@ -516,6 +536,8 @@ impl Server {
             keep: false,
             timeout_seconds: Some(timeout_arg(args).as_secs()),
             name: Some(name.clone()),
+            provider: request.provider,
+            machine: request.machine,
         })?;
         spec.inputs = inputs;
         spec.max_artifact_bytes = self.options.max_file_bytes;
@@ -648,8 +670,11 @@ impl Server {
                 .and_then(Value::as_bool)
                 .unwrap_or(false);
         let short: String = slug.chars().filter(char::is_ascii_alphanumeric).take(12).collect();
-        let request =
-            runtime_request(format!("app-{short}-{}", short_id()), hardware.as_deref(), high_mem)?;
+        let mut request =
+            request_for(format!("app-{short}-{}", short_id()), args, hardware.as_deref())?;
+        if request.provider == Provider::Colab {
+            request.high_mem = high_mem;
+        }
         let name = request.name.clone();
         self.start(request, false).await?;
         lock(&self.app_runtimes).insert(slug.to_owned(), name.clone());
@@ -856,6 +881,17 @@ mod tests {
         let cpu = runtime_request("a".into(), None, true).unwrap();
         assert!(cpu.gpu.is_none() && cpu.tpu.is_none() && cpu.high_mem);
         assert!(runtime_request("a".into(), Some("rtx5090"), false).is_err());
+        let codespace = request_for(
+            "b".into(),
+            &serde_json::json!({"provider": "codespaces", "machine": "basicLinux32gb"}),
+            None,
+        )
+        .unwrap();
+        assert_eq!(codespace.provider, Provider::Codespaces);
+        assert_eq!(codespace.machine.as_deref(), Some("basicLinux32gb"));
+        let colab = request_for("c".into(), &serde_json::json!({}), Some("t4")).unwrap();
+        assert_eq!(colab.gpu.as_deref(), Some("t4"));
+        assert!(request_for("d".into(), &serde_json::json!({"provider": "aws"}), None).is_err());
         assert_eq!(hardware_choices()[0], "cpu");
     }
 

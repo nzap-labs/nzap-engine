@@ -13,18 +13,25 @@ Only the latest release is supported with security fixes.
 
 NZAP Engine acts with the Google account you connect. The assets it guards are:
 
-| Asset                      | Where it lives                                                                  | Protection                                                 |
-| -------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Google refresh token       | OS keychain (a 0600 file only where no keychain exists, with a visible warning) | never sent to the webview, never logged                    |
-| Google access token        | process memory                                                                  | short-lived, refreshed ahead of expiry, never logged       |
-| Runtime proxy tokens       | `sessions.json` in the app data directory (0600)                                | VM-scoped and short-lived; never sent to the webview       |
-| Your notebooks and history | app data directory                                                              | local only; nothing is uploaded except to your own runtime |
+| Asset                             | Where it lives                                                                  | Protection                                                 |
+| --------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Google refresh token              | OS keychain (a 0600 file only where no keychain exists, with a visible warning) | never sent to the webview, never logged                    |
+| Google access token               | process memory                                                                  | short-lived, refreshed ahead of expiry, never logged       |
+| Runtime proxy tokens              | `sessions.json` in the app data directory (0600)                                | VM-scoped and short-lived; never sent to the webview       |
+| Your notebooks and history        | app data directory                                                              | local only; nothing is uploaded except to your own runtime |
+| GitHub token, CodeSandbox API key | OS keychain (same fallback as Google)                                           | never sent to the webview or to agents, never logged       |
 
 ## Design decisions
 
 - **No listening server.** The UI talks to the engine over Tauri IPC, restricted
   by capabilities. The only socket is the OAuth loopback listener: bound to
   loopback, ephemeral port, one request, closed after use or after 5 minutes.
+- **Codespaces and CodeSandbox stay private.** A codespace's Jupyter port is
+  private: GitHub only forwards requests that carry the owner's token. CodeSandbox
+  sandboxes are created private with private preview hosts, and their Jupyter
+  Server also requires a random per-VM token. Both are deleted on request or when
+  idle (and GitHub deletes idle codespaces itself through their retention
+  period).
 - **AI agents over stdio.** `nzap-engine mcp` serves MCP on stdin/stdout to
   the client that launched it, never on a port. Agents never receive Google
   tokens. They may read and write local files only inside the folder the server
@@ -43,7 +50,8 @@ NZAP Engine acts with the Google account you connect. The assets it guards are:
   the SHA-256 digests in the catalog. They run on your Colab VM, never on your
   machine, and you can read the source before running one.
 - **No telemetry.** Network traffic goes only to Google (accounts, Colab, Drive,
-  your runtimes) and GitHub (the notebook catalog).
+  your runtimes) and GitHub (the notebook catalog), plus GitHub Codespaces and
+  CodeSandbox once you connect them.
 - **Supply chain.** `Cargo.lock` and `package-lock.json` are committed and CI
   builds with `--locked`. Every push runs `cargo audit` (RustSec) and
   `npm audit` on the shipped dependencies.

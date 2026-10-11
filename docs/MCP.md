@@ -35,20 +35,20 @@ that path rather than the temporary mount the app runs from.
 
 ## Tools
 
-| Tool             | What it does                                                                                          |
-| ---------------- | ----------------------------------------------------------------------------------------------------- |
-| `status`         | Google connection, runtimes held and limits, hardware names, shared folders                           |
-| `list_runtimes`  | This agent's runtimes, plus other VMs on the account it could attach                                  |
-| `start_runtime`  | Allocate a VM (`cpu`, `t4`, `l4`, `g4`, `a100`, `h100`, `v5e1`, `v6e1`; optional High-RAM)            |
-| `attach_runtime` | Use a VM the agent did not start (for example one the app manages); it is never released by the agent |
-| `stop_runtime`   | Release a runtime (or detach from an attached one)                                                    |
-| `run_code`       | Run Python in the runtime's IPython kernel; returns output, results, errors and images                |
-| `list_files`     | List a folder on the runtime                                                                          |
-| `upload_file`    | Local file → runtime                                                                                  |
-| `download_file`  | Runtime → local file                                                                                  |
-| `run_job`        | One call: fresh VM, upload `inputs`, run a script, download `artifacts`, release the VM               |
-| `list_apps`      | The NZAP apps (text to speech, sentiment, …) with parameters, recommended hardware and timings        |
-| `run_app`        | Run an app; media results are saved locally, text results returned; the model stays warm for reruns   |
+| Tool             | What it does                                                                                                                                                                                |
+| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `status`         | Google connection, runtimes held and limits, hardware names, shared folders                                                                                                                 |
+| `list_runtimes`  | This agent's runtimes, plus other VMs on the account it could attach                                                                                                                        |
+| `start_runtime`  | Allocate a VM (`cpu`, `t4`, `l4`, `g4`, `a100`, `h100`, `v5e1`, `v6e1`; optional High-RAM), or a Codespaces / CodeSandbox VM with `provider` and `machine` ([PROVIDERS.md](./PROVIDERS.md)) |
+| `attach_runtime` | Use a VM the agent did not start (for example one the app manages); it is never released by the agent                                                                                       |
+| `stop_runtime`   | Release a runtime (or detach from an attached one)                                                                                                                                          |
+| `run_code`       | Run Python in the runtime's IPython kernel; returns output, results, errors and images                                                                                                      |
+| `list_files`     | List a folder on the runtime                                                                                                                                                                |
+| `upload_file`    | Local file → runtime                                                                                                                                                                        |
+| `download_file`  | Runtime → local file                                                                                                                                                                        |
+| `run_job`        | One call: fresh VM, upload `inputs`, run a script, download `artifacts`, release the VM                                                                                                     |
+| `list_apps`      | The NZAP apps (text to speech, sentiment, …) with parameters, recommended hardware and timings                                                                                              |
+| `run_app`        | Run an app; media results are saved locally, text results returned; the model stays warm for reruns                                                                                         |
 
 Long calls (`run_job`, `run_app`) report progress to clients that ask for it, and
 a client can cancel any call.

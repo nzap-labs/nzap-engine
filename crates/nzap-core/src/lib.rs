@@ -16,6 +16,7 @@ pub mod http;
 pub mod notebooks;
 pub mod ops;
 pub mod paths;
+pub mod providers;
 pub mod python;
 pub mod runtime;
 pub mod secrets;

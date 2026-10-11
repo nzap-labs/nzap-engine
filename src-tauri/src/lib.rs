@@ -294,6 +294,14 @@ pub fn run() {
             commands::notebooks::notebook_export,
             commands::notebooks::notebook_import,
             commands::notebooks::notebook_run,
+            commands::providers::providers_status,
+            commands::providers::provider_machines,
+            commands::providers::github_set_token,
+            commands::providers::github_use_cli,
+            commands::providers::github_device_login,
+            commands::providers::github_disconnect,
+            commands::providers::codesandbox_set_key,
+            commands::providers::codesandbox_disconnect,
         ])
         .build(context())
         .expect("NZAP Engine failed to start");

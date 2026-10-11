@@ -7,6 +7,11 @@
 //! `{"cols": N, "rows": M}` for resizes. Port of colab-studio's `terminal.py`:
 //! frames are relayed unchanged, and only the two upstream shapes are ever
 //! forwarded to the VM.
+//!
+//! Codespaces and CodeSandbox VMs run a plain Jupyter Server, whose
+//! terminals speak terminado (`["stdin", s]`, `["stdout", s]`,
+//! `["set_size", rows, cols]`); frames are translated so the UI sees the
+//! same `{"data": …}` shape either way.
 
 use std::sync::Arc;
 
@@ -47,6 +52,38 @@ pub fn is_valid_frame(text: &str) -> bool {
     }
 }
 
+/// A UI frame as terminado expects it.
+pub fn to_terminado(frame: &str) -> Option<String> {
+    let value: Value = serde_json::from_str(frame).ok()?;
+    if let Some(data) = value.get("data").and_then(Value::as_str) {
+        return Some(serde_json::json!(["stdin", data]).to_string());
+    }
+    let (cols, rows) = (value.get("cols")?.as_u64()?, value.get("rows")?.as_u64()?);
+    Some(serde_json::json!(["set_size", rows, cols]).to_string())
+}
+
+/// What a terminado message means for the UI.
+#[derive(Debug, PartialEq, Eq)]
+enum Upstream {
+    Frame(String),
+    Disconnect,
+    Ignore,
+}
+
+fn from_terminado(text: &str) -> Upstream {
+    let Ok(Value::Array(message)) = serde_json::from_str::<Value>(text) else {
+        return Upstream::Ignore;
+    };
+    match message.first().and_then(Value::as_str) {
+        Some("stdout") => match message.get(1).and_then(Value::as_str) {
+            Some(data) => Upstream::Frame(serde_json::json!({ "data": data }).to_string()),
+            None => Upstream::Ignore,
+        },
+        Some("disconnect") => Upstream::Disconnect,
+        _ => Upstream::Ignore,
+    }
+}
+
 pub struct Terminal {
     input: mpsc::UnboundedSender<String>,
     task: JoinHandle<()>,
@@ -60,12 +97,17 @@ impl Terminal {
         sink: TerminalSink,
         on_activity: Arc<dyn Fn() + Send + Sync>,
     ) -> Result<Self> {
-        let url = proxy.tty_url()?;
-        let headers = [
-            (RUNTIME_PROXY_TOKEN_HEADER, proxy.token().to_owned()),
-            (CLIENT_AGENT_HEADER, CLIENT_AGENT.to_owned()),
-        ];
-        let socket = ws::connect(&url, &headers).await?;
+        let terminado = !proxy.is_colab();
+        let socket = if terminado {
+            let name = proxy.create_terminal().await?;
+            ws::connect(&proxy.terminal_ws_url(&name)?, &proxy.auth_headers()).await?
+        } else {
+            let headers = [
+                (RUNTIME_PROXY_TOKEN_HEADER, proxy.token().to_owned()),
+                (CLIENT_AGENT_HEADER, CLIENT_AGENT.to_owned()),
+            ];
+            ws::connect(&proxy.tty_url()?, &headers).await?
+        };
         let (mut upstream_sink, mut upstream) = socket.split();
         let (input, mut input_rx) = mpsc::unbounded_channel::<String>();
 
@@ -75,6 +117,14 @@ impl Terminal {
                     frame = input_rx.recv() => match frame {
                         Some(frame) => {
                             on_activity();
+                            let frame = if terminado {
+                                match to_terminado(&frame) {
+                                    Some(frame) => frame,
+                                    None => continue,
+                                }
+                            } else {
+                                frame
+                            };
                             if let Err(error) = upstream_sink.send(Message::Text(frame.into())).await {
                                 break Some(format!("connection to the runtime failed: {error}"));
                             }
@@ -82,6 +132,11 @@ impl Terminal {
                         None => break None,
                     },
                     message = upstream.next() => match message {
+                        Some(Ok(Message::Text(text))) if terminado => match from_terminado(&text) {
+                            Upstream::Frame(frame) => sink(TerminalEvent::Frame(frame)),
+                            Upstream::Disconnect => break None,
+                            Upstream::Ignore => {}
+                        },
                         Some(Ok(Message::Text(text))) => sink(TerminalEvent::Frame(text.to_string())),
                         Some(Ok(Message::Binary(bytes))) => {
                             sink(TerminalEvent::Frame(String::from_utf8_lossy(&bytes).into_owned()))
@@ -141,5 +196,18 @@ mod tests {
         assert!(!is_valid_frame(r#"{"cols": -1, "rows": 2}"#));
         assert!(!is_valid_frame(r#"["data"]"#));
         assert!(!is_valid_frame("not json"));
+    }
+
+    #[test]
+    fn terminado_frames_are_translated() {
+        assert_eq!(to_terminado(r#"{"data": "ls\r"}"#).unwrap(), r#"["stdin","ls\r"]"#);
+        assert_eq!(to_terminado(r#"{"cols": 80, "rows": 24}"#).unwrap(), r#"["set_size",24,80]"#);
+        assert_eq!(
+            from_terminado(r#"["stdout", "root@cs:~$ "]"#),
+            Upstream::Frame(r#"{"data":"root@cs:~$ "}"#.into())
+        );
+        assert_eq!(from_terminado(r#"["setup", {}]"#), Upstream::Ignore);
+        assert_eq!(from_terminado(r#"["disconnect", 1]"#), Upstream::Disconnect);
+        assert_eq!(from_terminado("garbage"), Upstream::Ignore);
     }
 }

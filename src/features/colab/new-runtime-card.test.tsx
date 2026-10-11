@@ -30,6 +30,44 @@ describe('NewRuntimeCard', () => {
     expect(created.shape).toBe('High-RAM')
   })
 
+  it('needs the provider connected, not Google, for Codespaces', async () => {
+    const { user } = renderWithEngine(<NewRuntimeCard />)
+    await user.click(await screen.findByRole('radio', { name: 'Codespaces' }))
+    expect(
+      await screen.findByText('Connect GitHub Codespaces in Settings → Compute providers first.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Launch runtime/ })).toBeDisabled()
+    // No Google connection is needed for other providers.
+    expect(screen.queryByText('Connect Google Auth first.')).not.toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup', { name: 'Hardware' })).not.toBeInTheDocument()
+  })
+
+  it('creates a codespace with the chosen machine', async () => {
+    const onCreated = vi.fn()
+    const { user, engine } = renderWithEngine(<NewRuntimeCard onCreated={onCreated} />, {
+      github: { login: 'ada' },
+    })
+    await user.click(await screen.findByRole('radio', { name: 'Codespaces' }))
+    await user.type(screen.getByPlaceholderText('my-runtime'), 'cs-box')
+    const machine = screen.getByRole('combobox', { name: 'Machine' })
+    await screen.findByRole('option', { name: /4 cores/ })
+    await user.selectOptions(machine, 'standardLinux32gb')
+    await user.click(screen.getByRole('button', { name: /Launch runtime/ }))
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith('cs-box'))
+    const created = engine.state.sessions.get('cs-box')!
+    expect(created.provider).toBe('codespaces')
+    expect(created.machine).toBe('standardLinux32gb')
+  })
+
+  it('creates a CodeSandbox VM with the default tier', async () => {
+    const { user, engine } = renderWithEngine(<NewRuntimeCard />, { codesandbox: true })
+    await user.click(await screen.findByRole('radio', { name: 'CodeSandbox' }))
+    await user.type(screen.getByPlaceholderText('my-runtime'), 'sandbox')
+    await user.click(screen.getByRole('button', { name: /Launch runtime/ }))
+    await waitFor(() => expect(engine.state.sessions.get('sandbox')?.machine).toBe('Nano'))
+    expect(engine.state.sessions.get('sandbox')?.provider).toBe('codesandbox')
+  })
+
   it('shows why a launch failed', async () => {
     const { user } = renderWithEngine(<NewRuntimeCard />, {
       connected: true,

@@ -17,7 +17,7 @@ use serde_json::{json, Value};
 
 use crate::Shared;
 
-const PROMPT: &str = "root@mock:/content# ";
+pub(crate) const PROMPT: &str = "root@mock:/content# ";
 
 pub(crate) fn routes() -> Router<Shared> {
     Router::new().route("/colab/tty", get(tty))
@@ -50,7 +50,7 @@ fn frame(data: &str) -> Message {
     Message::Text(json!({ "data": data }).to_string().into())
 }
 
-fn run(command: &str) -> String {
+pub(crate) fn run(command: &str) -> String {
     match command.trim() {
         "" => String::new(),
         "whoami" => "root\r\n".to_owned(),

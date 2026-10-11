@@ -22,11 +22,13 @@ Google Colab provides the compute; GitHub hosts the public notebooks.
     history.rs  per-runtime JSONL log, export to ipynb/md/txt/jsonl
     ops/        automation, run a local file, ephemeral jobs, import from URL
     notebooks/  GitHub catalog (verified by SHA-256) + local notebook store
+    providers/  GitHub Codespaces + CodeSandbox VMs serving Jupyter (create, wake, delete)
     settings.rs, paths.rs, config.rs (every Google endpoint in one place)
     │
     ▼  HTTPS / WSS
  accounts.google.com · colab.research.google.com · colab.pa.googleapis.com
  runtime proxies · Drive v3 · raw.githubusercontent.com
+ api.github.com · *.app.github.dev · api.codesandbox.io · *.csb.app
 ```
 
 ## Why these boundaries
@@ -42,6 +44,14 @@ nothing listens on the network. It builds its own `Engine` over the app's data
 folders and keychain entry, with its own runtime list (`agents/mcp-<pid>.json`)
 so it never overwrites the app's `sessions.json`. Local files go through
 `nzap-mcp`'s shared-folder check. See [MCP.md](./MCP.md).
+
+**One runtime shape, several providers.** Colab, Codespaces and CodeSandbox VMs
+all end as a Jupyter Server the engine reaches over HTTPS; only the credentials
+differ (`ProxyAuth`: Colab's proxy token, `X-Github-Token`, or CodeSandbox's
+preview token plus a Jupyter token). Kernels, files, terminals (Colab's
+`/colab/tty` or Jupyter's terminado), notebooks, apps and jobs are written once.
+`providers/` owns what differs: creating, waking and deleting VMs, and the
+reaper that deletes idle ones. See [PROVIDERS.md](./PROVIDERS.md).
 
 **`nzap-core` has no Tauri dependency.** The engine is tested with plain
 `cargo test` against `nzap-mock-colab`, a mock of every Google endpoint the

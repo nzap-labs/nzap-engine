@@ -9,7 +9,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, MutexGuard, Weak};
+use std::sync::{Arc, Mutex, MutexGuard, RwLock, Weak};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
@@ -24,10 +24,12 @@ use crate::colab::client::validate_endpoint;
 use crate::colab::resources::{self, Resources};
 use crate::colab::{AuthType, ColabClient};
 use crate::config::{
-    hardware_label, shape_display_label, RuntimeRequest, KEEP_ALIVE_INTERVAL, KEEP_ALIVE_MAX,
+    hardware_label, shape_display_label, Provider, RuntimeRequest, KEEP_ALIVE_INTERVAL,
+    KEEP_ALIVE_MAX,
 };
 use crate::error::{Error, Result};
 use crate::history::{collect_outputs, HistoryLog};
+use crate::providers::Providers;
 use crate::runtime::{ColabRequest, KernelChannel, RuntimeProxy, Terminal, TerminalSink};
 use crate::secrets::write_private;
 
@@ -61,6 +63,11 @@ struct Inner {
     pending_colab: Mutex<HashMap<String, PendingColab>>,
     /// Serializes writes of the sessions file.
     save_lock: Mutex<()>,
+    /// Codespaces and CodeSandbox (set by the engine).
+    providers: RwLock<Option<Arc<Providers>>>,
+    /// Deletes idle provider runtimes; how often it looks.
+    reaper: Mutex<Option<JoinHandle<()>>>,
+    reaper_interval: Mutex<Duration>,
 }
 
 /// One entry of a directory listing.
@@ -173,7 +180,37 @@ impl SessionManager {
                 keepalive_interval: Mutex::new(KEEP_ALIVE_INTERVAL),
                 pending_colab: Mutex::new(HashMap::new()),
                 save_lock: Mutex::new(()),
+                providers: RwLock::new(None),
+                reaper: Mutex::new(None),
+                reaper_interval: Mutex::new(Duration::from_secs(60)),
             }),
+        }
+    }
+
+    /// Enable Codespaces and CodeSandbox runtimes.
+    pub fn set_providers(&self, providers: Arc<Providers>) {
+        if let Ok(mut slot) = self.inner.providers.write() {
+            *slot = Some(providers);
+        }
+    }
+
+    fn providers(&self) -> Result<Arc<Providers>> {
+        self.inner
+            .providers
+            .read()
+            .ok()
+            .and_then(|slot| slot.clone())
+            .ok_or_else(|| Error::internal("Other compute providers are not available here."))
+    }
+
+    /// How often the idle reaper looks (shortened in tests). A running
+    /// reaper restarts with the new interval.
+    pub fn set_reaper_interval(&self, interval: Duration) {
+        *lock(&self.inner.reaper_interval) = interval.max(Duration::from_millis(10));
+        let running = lock(&self.inner.reaper).take();
+        if let Some(task) = running {
+            task.abort();
+            self.start_reaper();
         }
     }
 
@@ -265,6 +302,9 @@ impl SessionManager {
         if state.url.is_empty() {
             return Err(Error::runtime(None, "This runtime has no proxy address."));
         }
+        if state.provider != Provider::Colab {
+            return self.providers()?.proxy(&state);
+        }
         Ok(RuntimeProxy::new(self.http(), &state.url, &state.token))
     }
 
@@ -272,16 +312,22 @@ impl SessionManager {
 
     fn register(&self, state: SessionState, how: &str) {
         let name = state.name.clone();
+        let provider = state.provider;
         let event = json!({
             "endpoint": state.endpoint,
             "accelerator": state.hardware(),
             "shape": shape_display_label(&state.machine_shape),
+            "provider": provider,
             "how": how,
         });
         lock(&self.inner.sessions).insert(name.clone(), state);
         self.save();
         self.inner.history.log(&name, "session_created", event);
-        self.start_keepalive(&name);
+        if provider == Provider::Colab {
+            self.start_keepalive(&name);
+        } else {
+            self.start_reaper();
+        }
     }
 
     /// Allocate a VM and track it as a runtime.
@@ -294,6 +340,16 @@ impl SessionManager {
             return Err(Error::invalid(format!("A runtime named '{name}' already exists.")));
         }
         tracing::info!("Requesting a {} runtime", request.label());
+        if request.provider != Provider::Colab {
+            let state = self.providers()?.create(&name, &request).await?;
+            if lock(&self.inner.sessions).contains_key(&name) {
+                // Another request took the name meanwhile; do not orphan the VM.
+                let _ = self.providers()?.release(&state).await;
+                return Err(Error::invalid(format!("A runtime named '{name}' already exists.")));
+            }
+            self.register(state, "created");
+            return self.view(&name);
+        }
         let (_, accelerator, _) = request.resolved();
         let assignment = self.inner.client.assign(&request, None).await?;
         let state = SessionState::from_assignment(&name, &assignment, accelerator.as_str());
@@ -380,10 +436,41 @@ impl SessionManager {
         self.view(&name)
     }
 
-    /// After a restart: forget runtimes whose VM is gone and resume the
-    /// keep-alive for the rest.
+    /// After a restart: forget Codespaces / CodeSandbox runtimes deleted
+    /// elsewhere (or automatically) and restart the idle reaper. Needs no
+    /// Google connection.
+    pub async fn resume_providers(&self) {
+        let states: Vec<SessionState> = lock(&self.inner.sessions)
+            .values()
+            .filter(|state| state.provider != Provider::Colab)
+            .cloned()
+            .collect();
+        if states.is_empty() {
+            return;
+        }
+        let Ok(providers) = self.providers() else { return };
+        for state in states {
+            if let Ok(false) = providers.exists(&state).await {
+                lock(&self.inner.sessions).remove(&state.name);
+                self.inner.history.log(
+                    &state.name,
+                    "session_terminated",
+                    json!({"reason": "expired"}),
+                );
+            }
+        }
+        self.save();
+        self.start_reaper();
+    }
+
+    /// After a restart: forget Colab runtimes whose VM is gone and resume
+    /// the keep-alive for the rest.
     pub async fn resume(&self) -> Result<()> {
-        let names = self.names();
+        let names: Vec<String> = lock(&self.inner.sessions)
+            .values()
+            .filter(|state| state.provider == Provider::Colab)
+            .map(|state| state.name.clone())
+            .collect();
         if names.is_empty() {
             return Ok(());
         }
@@ -419,6 +506,11 @@ impl SessionManager {
         let _guard = self.inner.connect_lock.lock().await;
         if let Some(channel) = self.connected_channel(name) {
             return Ok(channel);
+        }
+        let state = self.get(name)?;
+        if state.provider != Provider::Colab {
+            // A stopped codespace or hibernated sandbox is woken first.
+            self.providers()?.ensure_running(&state).await?;
         }
         if self.get(name)?.kernel_id.is_none() {
             self.start_kernel(name, "python3").await?;
@@ -767,10 +859,17 @@ impl SessionManager {
 
     // ------------------------------------------------------------ keep-alive
 
-    /// One keep-alive ping (also used by the background loop).
+    /// One keep-alive ping (also used by the background loop). Codespaces
+    /// and CodeSandbox runtimes are only checked: they are meant to go idle,
+    /// and wake on the next use.
     pub async fn keepalive(&self, name: &str) -> Result<Value> {
         let state = self.get(name)?;
-        match self.inner.client.keep_alive(&state.endpoint).await {
+        let ping = if state.provider == Provider::Colab {
+            self.inner.client.keep_alive(&state.endpoint).await
+        } else {
+            self.proxy(name)?.status().await.map(|_| ())
+        };
+        match ping {
             Ok(()) => {
                 let now = unix_now();
                 self.update(name, |state| {
@@ -791,6 +890,9 @@ impl SessionManager {
     /// while the runtime is tracked. Idempotent.
     pub fn start_keepalive(&self, name: &str) {
         if !self.inner.keepalive_enabled.load(Ordering::SeqCst) {
+            return;
+        }
+        if self.get(name).is_ok_and(|state| state.provider != Provider::Colab) {
             return;
         }
         let mut tasks = lock(&self.inner.keepalive_tasks);
@@ -822,6 +924,11 @@ impl SessionManager {
     /// `unassign = false` the VM stays alive on Google's side (used by
     /// [`Self::release_endpoint`], which unassigns once for all entries).
     pub async fn stop(&self, name: &str, unassign: bool) -> Result<StopOutcome> {
+        self.stop_because(name, unassign, if unassign { "user_requested" } else { "released" })
+            .await
+    }
+
+    async fn stop_because(&self, name: &str, unassign: bool, reason: &str) -> Result<StopOutcome> {
         let state = lock(&self.inner.sessions).remove(name).ok_or_else(|| missing(name))?;
         if let Some(channel) = lock(&self.inner.channels).remove(name) {
             channel.stop();
@@ -831,13 +938,25 @@ impl SessionManager {
         }
         lock(&self.inner.pending_colab).remove(name);
         self.save();
-        self.inner.history.log(
-            name,
-            "session_terminated",
-            json!({ "reason": if unassign { "user_requested" } else { "released" } }),
-        );
+        self.inner.history.log(name, "session_terminated", json!({ "reason": reason }));
         if !unassign || state.endpoint.is_empty() {
             return Ok(StopOutcome { released: false, warning: None });
+        }
+        if state.provider != Provider::Colab {
+            let label = state.provider.label();
+            return match self.providers()?.release(&state).await {
+                Ok(()) => Ok(StopOutcome { released: true, warning: None }),
+                Err(error) => {
+                    tracing::warn!("Deleting {} on {label} failed: {error}", state.endpoint);
+                    Ok(StopOutcome {
+                        released: false,
+                        warning: Some(format!(
+                            "{label} did not confirm the deletion ({error}). Delete it on {label} \
+                             if it still exists."
+                        )),
+                    })
+                }
+            };
         }
         match self.inner.client.unassign(&state.endpoint).await {
             Ok(()) => Ok(StopOutcome { released: true, warning: None }),
@@ -869,9 +988,69 @@ impl SessionManager {
         self.inner.client.unassign(endpoint).await
     }
 
-    /// Release every runtime (disconnecting Google).
+    /// Delete Codespaces / CodeSandbox runtimes idle for longer than the
+    /// auto-release setting. Busy kernels are left alone. Returns the names.
+    pub async fn reap(&self) -> Vec<String> {
+        let Some(limit) = self.providers().ok().and_then(|providers| providers.auto_release())
+        else {
+            return Vec::new();
+        };
+        let now = unix_now();
+        let idle: Vec<String> = lock(&self.inner.sessions)
+            .values()
+            .filter(|state| state.provider != Provider::Colab)
+            .filter(|state| now - state.last_activity >= limit.as_secs_f64())
+            .map(|state| state.name.clone())
+            .collect();
+        let mut released = Vec::new();
+        for name in idle {
+            let busy = lock(&self.inner.channels)
+                .get(&name)
+                .and_then(|channel| channel.execution_state())
+                .is_some_and(|state| state == "busy");
+            if busy {
+                continue;
+            }
+            tracing::info!("Deleting idle runtime {name}");
+            if self.stop_because(&name, true, "idle_auto_release").await.is_ok() {
+                released.push(name);
+            }
+        }
+        released
+    }
+
+    /// Run [`Self::reap`] in the background while provider runtimes exist.
+    pub fn start_reaper(&self) {
+        let mut slot = lock(&self.inner.reaper);
+        if slot.as_ref().is_some_and(|task| !task.is_finished()) {
+            return;
+        }
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else { return };
+        let manager = self.clone();
+        *slot = Some(runtime.spawn(async move {
+            loop {
+                let interval = *lock(&manager.inner.reaper_interval);
+                tokio::time::sleep(interval).await;
+                manager.reap().await;
+                let any = lock(&manager.inner.sessions)
+                    .values()
+                    .any(|state| state.provider != Provider::Colab);
+                if !any {
+                    return;
+                }
+            }
+        }));
+    }
+
+    /// Release every Colab runtime (disconnecting Google). Codespaces and
+    /// CodeSandbox runtimes do not depend on Google and stay.
     pub async fn stop_all(&self) {
-        for name in self.names() {
+        let colab: Vec<String> = lock(&self.inner.sessions)
+            .values()
+            .filter(|state| state.provider == Provider::Colab)
+            .map(|state| state.name.clone())
+            .collect();
+        for name in colab {
             if let Err(error) = self.stop(&name, true).await {
                 tracing::warn!("Could not release {name}: {error}");
             }
@@ -881,6 +1060,9 @@ impl SessionManager {
     /// Stop background work without releasing anything (app shutdown).
     pub fn shutdown(&self) {
         for (_, task) in lock(&self.inner.keepalive_tasks).drain() {
+            task.abort();
+        }
+        if let Some(task) = lock(&self.inner.reaper).take() {
             task.abort();
         }
         for (_, channel) in lock(&self.inner.channels).drain() {
@@ -995,6 +1177,12 @@ impl SessionManager {
 
     pub async fn resources(&self, name: &str) -> Result<Resources> {
         let state = self.get(name)?;
+        if state.provider != Provider::Colab {
+            return Err(Error::invalid(format!(
+                "Live resource usage is shown for Colab runtimes; open this one on {} for its metrics.",
+                state.provider.label()
+            )));
+        }
         let raw = self.inner.client.get_resources(&state.url, &state.token).await?;
         Ok(resources::normalize(&raw))
     }

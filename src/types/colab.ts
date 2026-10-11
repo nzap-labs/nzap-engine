@@ -31,6 +31,15 @@ export interface ColabAccount {
   error?: string | null
 }
 
+/** Where a runtime's compute comes from. */
+export type Provider = 'colab' | 'codespaces' | 'codesandbox'
+
+export const PROVIDER_LABELS: Record<Provider, string> = {
+  colab: 'Google Colab',
+  codespaces: 'GitHub Codespaces',
+  codesandbox: 'CodeSandbox',
+}
+
 export interface ColabSession {
   name: string
   endpoint: string
@@ -56,6 +65,9 @@ export interface ColabSession {
   idleSeconds: number
   lifetimeRemainingSeconds: number
   idleRemainingSeconds: number
+  provider: Provider
+  /** The codespace's or sandbox's own page (other providers only). */
+  webUrl: string | null
 }
 
 export interface ColabAssignment {
@@ -119,6 +131,10 @@ export interface CreateSessionRequest {
   gpu?: string
   tpu?: string
   highMem?: boolean
+  /** Colab when absent. */
+  provider?: Provider
+  /** Codespaces machine type or CodeSandbox VM tier. */
+  machine?: string
 }
 
 /** One event streamed while a cell runs. */

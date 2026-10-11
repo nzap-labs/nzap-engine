@@ -16,6 +16,7 @@ use crate::error::{Error, Result};
 use crate::history::HistoryLog;
 use crate::notebooks::{Catalog, NotebookLibrary, NotebookStore};
 use crate::paths::AppPaths;
+use crate::providers::Providers;
 use crate::secrets::{self, FileStore, SecretStore, StorageKind};
 use crate::session::SessionManager;
 use crate::settings::{Settings, SettingsPatch, SettingsStore};
@@ -71,6 +72,8 @@ pub struct Engine {
     pub paths: AppPaths,
     pub auth: Arc<AuthManager>,
     pub colab: Arc<ColabClient>,
+    /// GitHub Codespaces and CodeSandbox.
+    pub providers: Arc<Providers>,
     pub sessions: SessionManager,
     pub notebooks: NotebookLibrary,
     pub settings: SettingsStore,
@@ -100,6 +103,12 @@ impl Engine {
                     .ok()
             })
             .unwrap_or_default();
+        let providers = Arc::new(Providers::new(
+            http.clone(),
+            &options.endpoints,
+            secret_store.clone(),
+            &current,
+        ));
         let auth = Arc::new(AuthManager::new(
             http.clone(),
             options.endpoints,
@@ -117,11 +126,12 @@ impl Engine {
             current.keep_alive,
             Duration::from_secs(current.keep_alive_interval_seconds),
         );
+        sessions.set_providers(providers.clone());
         let notebooks = NotebookLibrary::new(
             Catalog::new(http, &current.catalog_url, paths.catalog_cache_dir()),
             NotebookStore::new(paths.notebooks_dir()),
         );
-        Ok(Self { paths, auth, colab, sessions, notebooks, settings })
+        Ok(Self { paths, auth, colab, providers, sessions, notebooks, settings })
     }
 
     pub fn hardware_config(&self) -> HardwareConfig {
@@ -199,6 +209,8 @@ impl Engine {
     /// After launch (and after connecting): drop runtimes whose VM is gone
     /// and resume keep-alive for the rest.
     pub async fn resume(&self) {
+        // Codespaces / CodeSandbox runtimes do not need Google.
+        self.sessions.resume_providers().await;
         if !self.auth.snapshot().await.has_credentials {
             return;
         }
@@ -209,6 +221,7 @@ impl Engine {
 
     pub fn update_settings(&self, patch: SettingsPatch) -> Result<Settings> {
         let settings = self.settings.update(patch)?;
+        self.providers.configure(&settings);
         self.sessions.set_keepalive(
             settings.keep_alive,
             Duration::from_secs(settings.keep_alive_interval_seconds),

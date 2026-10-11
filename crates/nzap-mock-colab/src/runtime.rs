@@ -34,13 +34,17 @@ pub(crate) fn routes() -> Router<Shared> {
         .route("/proxy/{endpoint}/api/colab/resources", get(resources))
 }
 
-/// The proxy token, from the query parameter or the header.
+/// The proxy token, from the query parameter or the header. Codespaces and
+/// CodeSandbox runtimes check their provider's headers instead.
 pub(crate) fn check_runtime_token(
-    mock: &MockState,
+    mock: &mut MockState,
     endpoint: &str,
     headers: &HeaderMap,
     query: &HashMap<String, String>,
 ) -> Result<(), Response> {
+    if mock.assignment(endpoint).is_none() {
+        return crate::providers::check_provider_runtime(mock, endpoint, headers);
+    }
     let Some(assignment) = mock.assignment(endpoint) else {
         return Err((StatusCode::NOT_FOUND, "no such runtime").into_response());
     };
@@ -57,7 +61,7 @@ pub(crate) fn check_runtime_token(
 
 macro_rules! runtime_or_return {
     ($mock:expr, $endpoint:expr, $headers:expr, $query:expr) => {{
-        if let Err(response) = check_runtime_token(&$mock, &$endpoint, &$headers, &$query) {
+        if let Err(response) = check_runtime_token(&mut $mock, &$endpoint, &$headers, &$query) {
             return response;
         }
         match $mock.runtimes.get_mut(&$endpoint) {
@@ -408,12 +412,12 @@ async fn resources(
     headers: HeaderMap,
     Query(query): Params,
 ) -> Response {
-    let mock = state.lock().expect("mock state");
+    let mut mock = state.lock().expect("mock state");
     // colab-vscode sends the token header for telemetry; require it.
     if headers.get("x-colab-runtime-proxy-token").is_none() {
         return (StatusCode::FORBIDDEN, "token header required").into_response();
     }
-    if let Err(response) = check_runtime_token(&mock, &endpoint, &headers, &query) {
+    if let Err(response) = check_runtime_token(&mut mock, &endpoint, &headers, &query) {
         return response;
     }
     Json(mock.resources.clone()).into_response()

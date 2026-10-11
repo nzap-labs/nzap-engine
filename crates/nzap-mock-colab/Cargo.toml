@@ -12,6 +12,7 @@ authors.workspace = true
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
 base64 = "0.22"
+rmpv = "1"
 serde.workspace = true
 serde_json.workspace = true
 sha2 = "0.10"
