@@ -10,17 +10,23 @@ you a console, a real terminal, a file manager, parameterised notebooks and
 ephemeral jobs. There is no server, no NZAP account and no database: install one
 package and connect Google.
 
-> **Status: pre-release.** Every feature is built and tested against a mock
-> of Google's services on Windows, macOS and Linux. The first release follows
-> a pass of the [live checklist](./docs/TESTING.md#live-verification-checklist)
-> against real Colab. [PLAN.md](./PLAN.md) has the design and the history.
-
 ## Install
 
 Download the installer for Windows, macOS or Linux from
-[Releases](https://github.com/nzap-labs/nzap-engine/releases), open it, and
-click **Connect Google**. [docs/INSTALL.md](./docs/INSTALL.md) covers each OS
-and unsigned-build warnings.
+[nzap.in](https://nzap.in) or
+[Releases](https://github.com/nzap-labs/nzap-engine-releases/releases/latest),
+open it, and click **Connect Google**. [docs/INSTALL.md](./docs/INSTALL.md)
+covers each OS, CLI installation, and unsigned-build notes.
+
+Or install from your terminal / AI coding agent:
+
+```bash
+# macOS / Linux / WSL
+curl -fsSL https://nzap.in/install.sh | sh
+
+# Windows PowerShell
+irm https://nzap.in/install.ps1 | iex
+```
 
 ## What it does
 

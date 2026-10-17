@@ -1,8 +1,15 @@
 # Installing NZAP Engine
 
-Download the installer for your system from the
-[releases page](https://github.com/nzap-labs/nzap-engine/releases). There is
-nothing else to install: no Python, no Node, no Docker and no server.
+Download the installer for your system from
+[nzap.in](https://nzap.in) or the
+[releases page](https://github.com/nzap-labs/nzap-engine-releases/releases/latest).
+There is nothing else to install: no Python, no Node, no Docker and no server.
+
+### Quick CLI / AI Agent Install
+
+- **macOS & Linux (`sh` / `bash` / `zsh`)**: `curl -fsSL https://nzap.in/install.sh | sh`
+- **Windows (`PowerShell`)**: `irm https://nzap.in/install.ps1 | iex`
+- **Windows (`cmd.exe`)**: `curl -fsSL https://nzap.in/install.cmd -o "%TEMP%\nzap.cmd" && "%TEMP%\nzap.cmd"`
 
 ## Windows 10 / 11
 

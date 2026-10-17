@@ -112,6 +112,7 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-') }}
           owner: ${{ (env.RELEASES_REPO != '' && github.ref_type == 'tag') && env.RELEASES_REPO_OWNER || '' }}
           repo: ${{ (env.RELEASES_REPO != '' && github.ref_type == 'tag') && env.RELEASES_REPO_NAME || '' }}
+          commitish: ${{ (env.RELEASES_REPO != '' && github.ref_type == 'tag') && 'main' || '' }}
           includeUpdaterJson: ${{ env.HAS_UPDATER_KEY == 'true' }}
           updaterJsonPreferNsis: true
           # Updater bundles (.sig + latest.json) need the signing key.
