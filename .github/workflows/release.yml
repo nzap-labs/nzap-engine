@@ -95,7 +95,7 @@ jobs:
             echo "APPLE_TEAM_ID=$APPLE_TEAM_ID"
           } >> "$GITHUB_ENV"
 
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@v1
         env:
           # A token for the public releases repository when one is configured.
           GITHUB_TOKEN: ${{ (vars.RELEASES_REPO != '' && github.ref_type == 'tag') && secrets.RELEASES_TOKEN || secrets.GITHUB_TOKEN }}
